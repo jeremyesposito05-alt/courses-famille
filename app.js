@@ -306,7 +306,8 @@ function rowHtml(x) {
 function renderMenus() {
   const main = $("#main");
   // À l'ouverture : la semaine en cours, ou la suivante si celle-ci n'a encore rien de prévu
-  if (!wkChosen && !weeks[wk] && weeks[addDays(wk, 7)]) wk = addDays(wk, 7);
+  const nChoix = m => Object.values((weeks[m] || {}).choix || {}).filter(Boolean).length;
+  if (!wkChosen && !nChoix(wk) && nChoix(addDays(wk, 7))) wk = addDays(wk, 7);
   const d0 = dt(wk), d6 = dt(addDays(wk, 6)), sl = weekSlots(wk);
   const planned = sl.filter(s => slotData(s.id).v).length;
   const wnum = (() => { const d = dt(addDays(wk, 3)), y0 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - y0) / 864e5 - 3 + (y0.getDay() + 6) % 7) / 7) })();
