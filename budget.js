@@ -22,7 +22,7 @@ const CAT_ORDER = Object.keys(CATS);
 const SLOT = { "Logement": 1, "Impôts": 2, "Enfants": 3, "Santé": 4, "Énergie": 5, "Loisirs": 6, "Alimentation": 7, "Assurances": 8 };
 const FREQ = { mois: "Mensuelle", an: "Annuelle (lissée par mois)", ponctuel: "Ponctuelle (ce mois-là)" };
 const MOIS_L = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-const VIEWS = [["resume", "Résumé"], ["factures", "Factures"], ["paiements", "Paiements"], ["graph", "Graphiques"]];
+const VIEWS = [["resume", "Résumé"], ["factures", "Factures"], ["paiements", "Paiements"], ["graph", "Graphiques"], ["avenir", "Avenir"]];
 const colorOf = c => SLOT[c] ? "var(--s" + SLOT[c] + ")" : "var(--s-other)";
 
 export function budgetModule(ctx) {
@@ -100,7 +100,8 @@ export function budgetModule(ctx) {
   function render(main) {
     if (!loaded || !config) { main.innerHTML = '<p class="empty">Chargement du budget…</p>'; return }
     const m = month();
-    main.innerHTML = view === "factures" ? viewFactures(m) : view === "paiements" ? viewPaiements(m) : view === "graph" ? viewGraph(m) : viewResume(m);
+    main.innerHTML = view === "factures" ? viewFactures(m) : view === "paiements" ? viewPaiements(m) : view === "graph" ? viewGraph(m) : view === "avenir" ? viewAvenir(m) : viewResume(m);
+    if (view === "avenir") simUpdate();
   }
 
   function viewResume(m) {
@@ -113,7 +114,7 @@ export function budgetModule(ctx) {
       '<tr><td>Individuelles</td><td>' + chf(m.ind.Papa) + '</td><td>' + chf(m.ind.Maman) + '</td></tr>' +
       '<tr><td>Total à charge</td><td>' + chf(m.com.Papa + m.ind.Papa) + '</td><td>' + chf(m.com.Maman + m.ind.Maman) + '</td></tr>' +
       '<tr class="tot"><td>Reste</td><td>' + hide(m.reste.Papa) + '</td><td>' + hide(m.reste.Maman) + '</td></tr></tbody></table>' +
-      (showSal ? '<button class="btn wide" data-b="sal">Modifier les salaires</button>' : "") + '</section>' + financeCard(m) +
+      (showSal ? '<button class="btn wide" data-b="sal">Modifier les salaires</button>' : "") + '</section>' + versementsCard(m) +
       '<div class="b-go">' + VIEWS.slice(1).map(([k, t]) => '<button class="btn" data-bv="' + k + '">' + t + ' ›</button>').join("") + '</div>';
   }
 
@@ -147,33 +148,69 @@ export function budgetModule(ctx) {
     const tA = annual.reduce((a, r) => a + (Number(r.montant) || 0), 0);
     h += group("Factures annuelles", annual, "var(--courge)", '<small class="f-sub">' + chf(tA) + ' CHF / an, soit par mois :</small>');
     h += '<tfoot><tr><th>Total par mois</th><td>' + chf(m.com.Papa + m.ind.Papa) + '</td><td>' + chf(m.com.Maman + m.ind.Maman) + '</td></tr></tfoot></table>';
-    h += epargneCard(m) + pilierCard(m);
     return h;
   }
-  // Épargne : ce qu'elle représente sur 1, 5 et 10 ans (sans intérêts, sans retrait)
-  function epargneCard(m) {
-    const rs = m.rows.filter(r => r.cat === "Épargne" && r.freq === "mois");
-    if (!rs.length) return "";
-    const tot = rs.reduce((a, r) => a + r.budget, 0);
-    const line = (lbl, v) => '<tr><td>' + esc(lbl) + '</td><td>' + chf(v * 12) + '</td><td>' + chf(v * 60) + '</td><td>' + chf(v * 120) + '</td></tr>';
-    return '<section class="card"><h2>Épargne : ce qu’elle représente</h2><p class="note">Montants mis de côté sans intérêts ni retrait. Avec des intérêts, ce sera un peu plus.</p>' +
-      '<table class="f-tab num"><thead><tr><th>Épargne</th><th>1 an</th><th>5 ans</th><th>10 ans</th></tr></thead><tbody>' +
-      rs.map(r => line(r.nom + (r.type === "Papa" || r.type === "Maman" ? " · " + r.type : "") + " (" + chf(r.budget) + "/mois)", r.budget)).join("") + '</tbody>' +
-      '<tfoot><tr><th>Total</th><td>' + chf(tot * 12) + '</td><td>' + chf(tot * 60) + '</td><td>' + chf(tot * 120) + '</td></tr></tfoot></table></section>';
-  }
-  // 3e pilier : objectif du plafond annuel, et projection selon les versements
-  function pilierCard(m) {
-    const rs = m.rows.filter(r => r.cat === "Prévoyance" && r.freq === "mois");
-    if (!rs.length) return "";
-    const obj = PLAFOND_3A / 12;
-    return '<section class="card"><h2>3e pilier</h2>' +
-      '<p class="obj num">Objectif : ' + chf(PLAFOND_3A) + ' CHF par an chacun, soit ' + chf(obj) + ' CHF par mois</p>' +
-      '<table class="f-tab num"><thead><tr><th></th><th>Par mois</th><th>Sur l’année</th><th>À compléter</th></tr></thead><tbody>' +
-      rs.map(r => { const an = r.budget * 12, gap = PLAFOND_3A - an;
-        return '<tr data-fact="' + r.id + '"><td><b class="' + r.type + '-t">' + esc(r.type) + '</b></td><td>' + chf(r.budget) + '</td><td>' + chf(an) + '</td><td>' + (gap > 0.005 ? '<b>' + chf(gap) + '</b>' : gap < -0.005 ? "dépasse de " + chf(-gap) : "✓") + '</td></tr>' }).join("") +
-      '</tbody></table><p class="note">« À compléter » : le versement à ajouter en décembre pour atteindre le plafond. Si vous changez la mensualité, ce montant s’adapte.</p></section>';
+  // Versements de chacun vers les comptes communs (repris du Résumé et de Paiements)
+  function versementsCard(m, withNote) {
+    const c = m.cpt, t = k => c.mois[k] + c.an[k];
+    return '<section class="card"><h2>Versements mensuels de chacun</h2>' +
+      '<table class="b-tab num"><thead><tr><th></th><th class="Papa">Papa</th><th class="Maman">Maman</th><th>Total</th></tr></thead><tbody>' +
+      '<tr><td>Compte des dépenses mensuelles</td><td>' + chf(c.mois.Papa) + '</td><td>' + chf(c.mois.Maman) + '</td><td>' + chf(c.mois.Papa + c.mois.Maman) + '</td></tr>' +
+      '<tr><td>Compte des factures annuelles</td><td>' + chf(c.an.Papa) + '</td><td>' + chf(c.an.Maman) + '</td><td>' + chf(c.an.Papa + c.an.Maman) + '</td></tr>' +
+      '<tr class="tot"><td>Total à verser</td><td>' + chf(t("Papa")) + '</td><td>' + chf(t("Maman")) + '</td><td>' + chf(t("Papa") + t("Maman")) + '</td></tr></tbody></table>' +
+      (withNote ? '<p class="note">Possibilité de verser ces sommes chaque mois sur deux comptes communs : l’un paie les factures du mois, l’autre accumule de quoi régler les factures annuelles quand elles tombent. Plus besoin de virements entre vous.</p>' : "") + '</section>';
   }
 
+  /* ---- Avenir : simulation de l'épargne et de la prévoyance ---- */
+  let sim = {}, rate = 0;
+  const simLines = () => month().rows.filter(r => (r.cat === "Épargne" || r.cat === "Prévoyance") && r.freq === "mois");
+  const fv = (pm, years) => { const i = rate / 100 / 12, n = years * 12; return i ? pm * ((Math.pow(1 + i, n) - 1) / i) : pm * n };
+  function viewAvenir(m) {
+    const lines = simLines(), ep = lines.filter(r => r.cat === "Épargne"), pv = lines.filter(r => r.cat === "Prévoyance");
+    const who = r => r.type === "Papa" || r.type === "Maman" ? ' <span class="tag ' + r.type + '">' + r.type + '</span>' : r.type === "commune" ? ' <span class="tag">prorata</span>' : ' <span class="tag">50/50</span>';
+    const input = r => '<input class="t sim" type="number" step="1" min="0" inputmode="decimal" data-sim="' + r.id + '" value="' + (sim[r.id] ?? r.budget) + '" aria-label="Montant mensuel ' + esc(r.nom) + '">';
+    const row = r => '<tr><td><b>' + esc(r.nom) + '</b>' + who(r) + '</td><td>' + input(r) + '</td><td id="s1-' + r.id + '"></td><td id="s5-' + r.id + '"></td><td id="s10-' + r.id + '"></td></tr>';
+    return '<p class="note" style="margin-top:12px">Changez les montants mensuels pour simuler : tout se recalcule en direct. Rien n’est enregistré tant que vous n’appuyez pas sur « Appliquer au budget ».</p>' +
+      '<section class="card"><h2>Épargne</h2>' +
+      '<label class="f" for="simRate">Rendement annuel supposé (%)</label><input class="t" id="simRate" type="number" step="0.1" min="0" max="15" inputmode="decimal" value="' + rate + '" style="max-width:120px">' +
+      '<p class="note">0 % = argent simplement mis de côté. Un rendement n’est jamais garanti : c’est une hypothèse, pas un conseil de placement.</p>' +
+      '<div class="scroll-x"><table class="f-tab num sim-tab"><thead><tr><th>Épargne</th><th>Par mois</th><th>1 an</th><th>5 ans</th><th>10 ans</th></tr></thead><tbody>' + ep.map(row).join("") + '</tbody>' +
+      '<tfoot><tr><th>Total</th><td id="sT0"></td><td id="sT1"></td><td id="sT5"></td><td id="sT10"></td></tr></tfoot></table></div></section>' +
+      '<section class="card"><h2>3e pilier</h2><p class="obj num">Objectif : ' + chf(PLAFOND_3A) + ' CHF par an chacun, soit ' + chf(PLAFOND_3A / 12) + ' CHF par mois</p>' +
+      '<div class="scroll-x"><table class="f-tab num sim-tab"><thead><tr><th></th><th>Par mois</th><th>Sur l’année</th><th>À compléter</th></tr></thead><tbody>' +
+      pv.map(r => '<tr><td>' + who(r) + '</td><td>' + input(r) + '</td><td id="p1-' + r.id + '"></td><td id="pg-' + r.id + '"></td></tr>').join("") + '</tbody></table></div>' +
+      '<p class="note">« À compléter » : ce qu’il faut verser en plus avant la fin de l’année pour atteindre le plafond.</p>' +
+      '<button class="btn wide" data-b="3amax">Régler les deux au plafond (' + chf(PLAFOND_3A / 12) + ' / mois)</button></section>' +
+      '<section class="card"><h2>Effet sur le budget</h2><p id="simEffect" class="num"></p>' +
+      '<div class="actions"><button class="btn" data-b="simreset">Revenir aux montants actuels</button><button class="btn primary" data-b="simapply">Appliquer au budget</button></div></section>';
+  }
+  function simUpdate() {
+    const lines = simLines(), rt = ratio(); if (!document.getElementById("simEffect")) return;
+    const val = r => { const v = Number(sim[r.id] ?? r.budget); return isNaN(v) ? 0 : v };
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v };
+    let tot = 0; const d = { Papa: 0, Maman: 0 };
+    lines.forEach(r => {
+      const v = val(r), delta = v - r.budget;
+      if (r.cat === "Épargne") { tot += v; set("s1-" + r.id, chf(fv(v, 1))); set("s5-" + r.id, chf(fv(v, 5))); set("s10-" + r.id, chf(fv(v, 10))) }
+      else { const an = v * 12, gap = PLAFOND_3A - an; set("p1-" + r.id, chf(an)); set("pg-" + r.id, gap > 0.5 ? chf(gap) : gap < -0.5 ? "au-dessus de " + chf(-gap) : "✓") }
+      if (r.type === "commune") { d.Papa += delta * rt.Papa; d.Maman += delta * rt.Maman } else if (r.type === "egal") { d.Papa += delta / 2; d.Maman += delta / 2 } else if (d[r.type] !== undefined) d[r.type] += delta;
+    });
+    set("sT0", chf(tot)); set("sT1", chf(fv(tot, 1))); set("sT5", chf(fv(tot, 5))); set("sT10", chf(fv(tot, 10)));
+    const fx = k => Math.abs(d[k]) < 0.005 ? "inchangé" : (d[k] > 0 ? "−" : "+") + chf(Math.abs(d[k])) + " CHF par mois";
+    document.getElementById("simEffect").innerHTML = 'Reste de Papa : <b>' + fx("Papa") + '</b><br>Reste de Maman : <b>' + fx("Maman") + '</b>';
+  }
+  document.addEventListener("input", e => {
+    if (e.target.dataset && e.target.dataset.sim) { sim[e.target.dataset.sim] = e.target.value === "" ? 0 : Number(String(e.target.value).replace(",", ".")); simUpdate() }
+    else if (e.target.id === "simRate") { rate = Math.max(0, Number(String(e.target.value).replace(",", ".")) || 0); simUpdate() }
+  });
+  function simApply(btn) {
+    const changes = simLines().filter(r => sim[r.id] !== undefined && Math.abs(Number(sim[r.id]) - r.budget) > 0.004);
+    if (!changes.length) { toast("Aucun montant modifié"); return }
+    if (!btn.dataset.sure) { btn.dataset.sure = "1"; btn.textContent = "Confirmer (" + changes.length + " montant" + (changes.length > 1 ? "s" : "") + ")"; return }
+    const b = writeBatch(fs);
+    changes.forEach(r => { const v = Math.round(Number(sim[r.id]) * 100) / 100; b.update(fref(r.id), { montant: v, maj: Date.now(), modifPar: me() }); factures[r.id].montant = v });
+    b.commit().catch(fail); sim = {}; toast("Budget mis à jour"); rerender();
+  }
   // Qui règle quelle facture, et le virement mensuel qui en découle
   function viewPaiements(m) {
     const v = Math.round(m.virement * 100) / 100, communes = m.rows.filter(r => SHARED(r.type)).sort((a, b) => b.budget - a.budget);
@@ -188,15 +225,7 @@ export function budgetModule(ctx) {
       '<tfoot><tr><th>Factures réglées par Papa</th><td colspan="2">' + chf(m.paid.Papa) + ' <small>(sa part : ' + chf(m.owed.Papa) + ')</small></td></tr>' +
       '<tr><th>Factures réglées par Maman</th><td colspan="2">' + chf(m.paid.Maman) + ' <small>(sa part : ' + chf(m.owed.Maman) + ')</small></td></tr></tfoot></table>' +
       '<p class="note">Touchez « Papa » ou « Maman » pour changer qui règle la facture. Les factures individuelles sont réglées par leur titulaire.</p>';
-    // Versements sur les comptes communs
-    const c = m.cpt, t = k => c.mois[k] + c.an[k];
-    h += '<section class="card"><h2>Versements mensuels de chacun</h2>' +
-      '<table class="b-tab num"><thead><tr><th></th><th class="Papa">Papa</th><th class="Maman">Maman</th><th>Total</th></tr></thead><tbody>' +
-      '<tr><td>Compte des dépenses mensuelles</td><td>' + chf(c.mois.Papa) + '</td><td>' + chf(c.mois.Maman) + '</td><td>' + chf(c.mois.Papa + c.mois.Maman) + '</td></tr>' +
-      '<tr><td>Compte des factures annuelles</td><td>' + chf(c.an.Papa) + '</td><td>' + chf(c.an.Maman) + '</td><td>' + chf(c.an.Papa + c.an.Maman) + '</td></tr>' +
-      '<tr class="tot"><td>Total à verser</td><td>' + chf(t("Papa")) + '</td><td>' + chf(t("Maman")) + '</td><td>' + chf(t("Papa") + t("Maman")) + '</td></tr></tbody></table>' +
-      '<p class="note">Possibilité de verser ces sommes chaque mois sur deux comptes communs : l’un paie les factures du mois, l’autre accumule de quoi régler les factures annuelles quand elles tombent. Plus besoin de virements entre vous.</p></section>';
-    return h;
+    return h + versementsCard(m, true);
   }
 
   function viewGraph(m) {
@@ -287,6 +316,9 @@ export function budgetModule(ctx) {
     if (d.b === "eye") { showSal = !showSal; rerender(); return true }
     if (d.b === "sal") { salSheet(); return true }
     if (d.b === "propose") { proposeSheet(); return true }
+    if (d.b === "simapply") { simApply(t); return true }
+    if (d.b === "simreset") { sim = {}; rate = 0; rerender(); return true }
+    if (d.b === "3amax") { simLines().filter(r => r.cat === "Prévoyance").forEach(r => { sim[r.id] = Math.round(PLAFOND_3A / 12 * 100) / 100 }); rerender(); return true }
     return false;
   }
   function sheetClick(t) {
