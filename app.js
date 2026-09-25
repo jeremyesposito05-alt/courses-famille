@@ -193,6 +193,7 @@ function alertsHtml() {
 function render() {
   if (!code || !me) return renderSetup();
   document.body.classList.toggle("store", store && tab === "courses");
+  document.body.dataset.tab = tab;
   $("#app").innerHTML = '<header class="top" id="top"></header><main id="main"></main>' +
     ((tab === "courses" && trip) || tab === "budget" ? '<button class="fab" id="add" aria-label="Ajouter un article">+</button>' : "") +
     '<nav class="tabs" role="tablist">' +
@@ -253,13 +254,13 @@ function renderHome() {
   const bs = budget.summary();
   let h = '<section class="hello"><p class="eyebrow">' + JOURS_LONG[d.getDay()] + " " + d.getDate() + " " + MOIS[d.getMonth()] + '</p><h2>Bonjour ' + esc(me) + '</h2></section>' + alertsHtml() +
     '<div class="tiles">' +
-    tile("courses", "Courses", next ? esc(next.nom) + " · " + esc(fmtD(next.date)) : "Aucune course prévue", next ? left + " article" + (left > 1 ? "s" : "") + " à acheter" : "", "var(--r-fl)",
+    tile("courses", "Courses", next ? esc(next.nom) + " · " + esc(fmtD(next.date)) : "Aucune course prévue", next ? left + " article" + (left > 1 ? "s" : "") + " à acheter" : "", "var(--t-courses)",
       '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
-    tile("menus", "Menus", todays.length ? "Aujourd’hui" : "Prochain repas", menuSub, "var(--courge)",
+    tile("menus", "Menus", todays.length ? "Aujourd’hui" : "Prochain repas", menuSub, "var(--t-menus)",
       '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
-    tile("budget", "Budget", "Versements du mois", bs ? me + " : " + money(bs[me]) + " CHF<br>" + other() + " : " + money(bs[other()]) + " CHF" : "Chargement…", "var(--papa)",
+    tile("budget", "Budget", "Versements du mois", bs ? me + " : " + money(bs[me]) + " CHF<br>" + other() + " : " + money(bs[other()]) + " CHF" : "Chargement…", "var(--t-budget)",
       '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
-    tile("reglages", "Réglages", "Téléphone de " + esc(me), "Listes, historique des prix", "var(--muted)",
+    tile("reglages", "Réglages", "Téléphone de " + esc(me), "Listes, historique des prix", "var(--t-reglages)",
       '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
     '</div><div class="quick"><button class="btn" data-quick="add">+ Ajouter à la liste</button><button class="btn" data-quick="store">Mode magasin</button><button class="btn" data-quick="depense">+ Dépense</button></div>';
   main.innerHTML = h;
