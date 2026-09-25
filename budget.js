@@ -3,7 +3,7 @@ import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch }
 
 // Catégories, dans l'ordre d'affichage du tableau. Les 8 premières ont une couleur fixe dans les graphiques.
 export const CATS = {
-  "Logement": [], "Impôts": [],
+  "Logement": [], "Maison du Sud": ["Crédit et impôt", "Charges", "Entretien"], "Impôts": [],
   "Enfants": ["Cantine", "Sport", "Vêtements", "École et sorties", "Camps", "Argent de poche", "Anniversaires", "Garde"],
   "Santé": ["Assurance maladie", "Complémentaire", "Médecin", "Pharmacie", "Dentiste", "10 % non remboursés"],
   "Énergie": ["Gaz", "Électricité", "Bois"],
@@ -13,8 +13,11 @@ export const CATS = {
   "Maison": ["Internet", "Serafe", "Entretien et réparations", "Équipement", "Eau et déchets"],
   "Voiture": ["Essence", "Entretien et pneus", "Taxe véhicule", "Vignette", "Parking et transports"],
   "Téléphone": [], "Vie courante": ["Coiffeur et soins", "Cadeaux", "Abonnements", "Frais bancaires"],
-  "Maison du Sud": ["Charges", "Entretien"], "Épargne": [], "Prévoyance": [], "Autre": []
+  "Épargne": [], "Prévoyance": [], "Autre": []
 };
+const PLAFOND_3A = 7258;   // plafond légal du 3e pilier (salariés avec caisse de pension)
+const SHARED = t => t === "commune" || t === "egal";
+const TYPE_LBL = { commune: "prorata", egal: "50/50", Papa: "individuelle", Maman: "individuelle" };
 const CAT_ORDER = Object.keys(CATS);
 const SLOT = { "Logement": 1, "Impôts": 2, "Enfants": 3, "Santé": 4, "Énergie": 5, "Loisirs": 6, "Alimentation": 7, "Assurances": 8 };
 const FREQ = { mois: "Mensuelle", an: "Annuelle (lissée par mois)", ponctuel: "Ponctuelle (ce mois-là)" };
@@ -52,21 +55,23 @@ export function budgetModule(ctx) {
       else if (f.freq === "an" && active(f)) budget = amt / 12;
       else if (f.freq === "ponctuel" && f.mois === ym) budget = amt;
       if (!budget) return;
-      const part = { Papa: f.type === "commune" ? budget * rt.Papa : f.type === "Papa" ? budget : 0,
-                     Maman: f.type === "commune" ? budget * rt.Maman : f.type === "Maman" ? budget : 0 };
-      rows.push(Object.assign({ id, budget, part }, f));
+      const share = k => f.type === "commune" ? budget * rt[k] : f.type === "egal" ? budget / 2 : f.type === k ? budget : 0;
+      rows.push(Object.assign({ id, budget, part: { Papa: share("Papa"), Maman: share("Maman") } }, f));
     });
     const sum = (k, filt) => rows.filter(filt).reduce((a, r) => a + r.part[k], 0);
-    const com = { Papa: sum("Papa", r => r.type === "commune"), Maman: sum("Maman", r => r.type === "commune") };
-    const ind = { Papa: sum("Papa", r => r.type !== "commune"), Maman: sum("Maman", r => r.type !== "commune") };
+    const com = { Papa: sum("Papa", r => SHARED(r.type)), Maman: sum("Maman", r => SHARED(r.type)) };
+    const ind = { Papa: sum("Papa", r => !SHARED(r.type)), Maman: sum("Maman", r => !SHARED(r.type)) };
+    // Comptes communs : dépenses mensuelles d'un côté, factures annuelles (lissées) de l'autre
+    const cpt = { mois: { Papa: sum("Papa", r => SHARED(r.type) && r.freq !== "an"), Maman: sum("Maman", r => SHARED(r.type) && r.freq !== "an") },
+                  an: { Papa: sum("Papa", r => SHARED(r.type) && r.freq === "an"), Maman: sum("Maman", r => SHARED(r.type) && r.freq === "an") } };
     // Paiements : ce que chacun règle, face à ce qu'il doit ; le reste se compense par un virement
     const paid = { Papa: 0, Maman: 0 }, owed = { Papa: 0, Maman: 0 }; let sansPayeur = 0;
     rows.forEach(r => {
-      const payer = r.type === "commune" ? r.payePar : (r.payePar || r.type);
+      const payer = SHARED(r.type) ? r.payePar : (r.payePar || r.type);
       if (payer !== "Papa" && payer !== "Maman") { sansPayeur++; return }
       paid[payer] += r.budget; owed.Papa += r.part.Papa; owed.Maman += r.part.Maman;
     });
-    return { rt, rows, com, ind, reste: { Papa: rt.p - com.Papa - ind.Papa, Maman: rt.m - com.Maman - ind.Maman }, paid, owed, virement: paid.Papa - owed.Papa, sansPayeur };
+    return { rt, rows, com, ind, cpt, reste: { Papa: rt.p - com.Papa - ind.Papa, Maman: rt.m - com.Maman - ind.Maman }, paid, owed, virement: paid.Papa - owed.Papa, sansPayeur };
   }
 
   /* ---- Graphique circulaire (anneau) avec légende chiffrée ---- */
@@ -108,32 +113,70 @@ export function budgetModule(ctx) {
       '<tr><td>Individuelles</td><td>' + chf(m.ind.Papa) + '</td><td>' + chf(m.ind.Maman) + '</td></tr>' +
       '<tr><td>Total à charge</td><td>' + chf(m.com.Papa + m.ind.Papa) + '</td><td>' + chf(m.com.Maman + m.ind.Maman) + '</td></tr>' +
       '<tr class="tot"><td>Reste</td><td>' + hide(m.reste.Papa) + '</td><td>' + hide(m.reste.Maman) + '</td></tr></tbody></table>' +
-      (showSal ? '<button class="btn wide" data-b="sal">Modifier les salaires</button>' : "") + '</section>' +
-      '<section class="card"><h2>Participation aux communes</h2>' + donut([{ k: "Papa", v: m.com.Papa, c: "var(--papa)" }, { k: "Maman", v: m.com.Maman, c: "var(--maman)" }], "Participation de chacun aux dépenses communes") + '</section>' +
+      (showSal ? '<button class="btn wide" data-b="sal">Modifier les salaires</button>' : "") + '</section>' + financeCard(m) +
       '<div class="b-go">' + VIEWS.slice(1).map(([k, t]) => '<button class="btn" data-bv="' + k + '">' + t + ' ›</button>').join("") + '</div>';
   }
 
+  // Carte « qui finance les dépenses communes »
+  function financeCard(m) {
+    const tot = m.com.Papa + m.com.Maman;
+    return '<section class="card"><h2>Qui finance les dépenses communes</h2>' +
+      '<p class="note">Les dépenses communes coûtent <b class="num">' + chf(tot) + ' CHF</b> par mois (les annuelles divisées par 12). Voici la part que chacun en finance : au prorata des salaires, ou 50/50 pour la maison du Sud, le voyage et les montres. C’est ce que chacun doit verser, quelle que soit la personne qui règle la facture.</p>' +
+      donut([{ k: "Papa", v: m.com.Papa, c: "var(--papa)" }, { k: "Maman", v: m.com.Maman, c: "var(--maman)" }], "Part de chacun dans les dépenses communes") + '</section>';
+  }
+
   // Tableau : chaque facture, ce qu'elle coûte à Papa et à Maman, par catégorie
+  function factRow(r) {
+    return '<tr data-fact="' + r.id + '"><td><button class="f-name" data-fact="' + r.id + '"><b>' + esc(r.nom) + '</b><small>' + chf(r.budget) +
+      (r.freq === "an" ? " / mois · " + chf(r.montant) + " / an" : r.freq === "ponctuel" ? " · ponctuelle" : "") + ' · ' + TYPE_LBL[r.type] + '</small></button></td>' +
+      '<td>' + (r.part.Papa ? chf(r.part.Papa) : "—") + '</td><td>' + (r.part.Maman ? chf(r.part.Maman) : "—") + '</td></tr>';
+  }
+  function group(title, rs, color, extra) {
+    if (!rs.length) return "";
+    const sP = rs.reduce((a, r) => a + r.part.Papa, 0), sM = rs.reduce((a, r) => a + r.part.Maman, 0);
+    return '<tbody style="--rc:' + color + '"><tr class="f-cat"><th scope="rowgroup">' + esc(title) + (extra || "") + '</th><td>' + chf(sP) + '</td><td>' + chf(sM) + '</td></tr>' +
+      rs.sort((a, b) => b.budget - a.budget).map(factRow).join("") + '</tbody>';
+  }
   function viewFactures(m) {
-    const byCat = {};
-    m.rows.forEach(r => { (byCat[r.cat] = byCat[r.cat] || []).push(r) });
+    const monthly = m.rows.filter(r => r.freq !== "an"), annual = m.rows.filter(r => r.freq === "an");
+    const byCat = {}; monthly.forEach(r => { (byCat[r.cat] = byCat[r.cat] || []).push(r) });
     const cats = Object.keys(byCat).sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
-    let h = '<p class="note" style="margin-top:12px">Montants par mois ; les factures annuelles sont divisées par 12. Touchez une facture pour la modifier.</p>' +
+    let h = '<p class="note" style="margin-top:12px">Ce que chaque facture coûte à chacun, par mois. Touchez une ligne pour la modifier.</p>' +
       '<table class="f-tab num"><thead><tr><th>Facture</th><th class="Papa">Papa</th><th class="Maman">Maman</th></tr></thead>';
-    cats.forEach(c => {
-      const rs = byCat[c].sort((a, b) => b.budget - a.budget);
-      const sP = rs.reduce((a, r) => a + r.part.Papa, 0), sM = rs.reduce((a, r) => a + r.part.Maman, 0);
-      h += '<tbody style="--rc:' + colorOf(c) + '"><tr class="f-cat"><th scope="rowgroup">' + esc(c) + '</th><td>' + chf(sP) + '</td><td>' + chf(sM) + '</td></tr>' +
-        rs.map(r => '<tr><td><button class="f-name" data-fact="' + r.id + '"><b>' + esc(r.nom) + '</b><small>' + chf(r.budget) + (r.freq === "an" ? " · " + chf(r.montant) + " / an" : r.freq === "ponctuel" ? " · ponctuelle" : "") +
-          ' · ' + (r.type === "commune" ? "prorata" : "individuelle") + '</small></button></td><td>' + (r.part.Papa ? chf(r.part.Papa) : "—") + '</td><td>' + (r.part.Maman ? chf(r.part.Maman) : "—") + '</td></tr>').join("") + '</tbody>';
-    });
+    cats.forEach(c => { h += group(c, byCat[c], colorOf(c)) });
+    const tA = annual.reduce((a, r) => a + (Number(r.montant) || 0), 0);
+    h += group("Factures annuelles", annual, "var(--courge)", '<small class="f-sub">' + chf(tA) + ' CHF / an, soit par mois :</small>');
     h += '<tfoot><tr><th>Total par mois</th><td>' + chf(m.com.Papa + m.ind.Papa) + '</td><td>' + chf(m.com.Maman + m.ind.Maman) + '</td></tr></tfoot></table>';
+    h += epargneCard(m) + pilierCard(m);
     return h;
+  }
+  // Épargne : ce qu'elle représente sur 1, 5 et 10 ans (sans intérêts, sans retrait)
+  function epargneCard(m) {
+    const rs = m.rows.filter(r => r.cat === "Épargne" && r.freq === "mois");
+    if (!rs.length) return "";
+    const tot = rs.reduce((a, r) => a + r.budget, 0);
+    const line = (lbl, v) => '<tr><td>' + esc(lbl) + '</td><td>' + chf(v * 12) + '</td><td>' + chf(v * 60) + '</td><td>' + chf(v * 120) + '</td></tr>';
+    return '<section class="card"><h2>Épargne : ce qu’elle représente</h2><p class="note">Montants mis de côté sans intérêts ni retrait. Avec des intérêts, ce sera un peu plus.</p>' +
+      '<table class="f-tab num"><thead><tr><th>Épargne</th><th>1 an</th><th>5 ans</th><th>10 ans</th></tr></thead><tbody>' +
+      rs.map(r => line(r.nom + (r.type === "Papa" || r.type === "Maman" ? " · " + r.type : "") + " (" + chf(r.budget) + "/mois)", r.budget)).join("") + '</tbody>' +
+      '<tfoot><tr><th>Total</th><td>' + chf(tot * 12) + '</td><td>' + chf(tot * 60) + '</td><td>' + chf(tot * 120) + '</td></tr></tfoot></table></section>';
+  }
+  // 3e pilier : objectif du plafond annuel, et projection selon les versements
+  function pilierCard(m) {
+    const rs = m.rows.filter(r => r.cat === "Prévoyance" && r.freq === "mois");
+    if (!rs.length) return "";
+    const obj = PLAFOND_3A / 12;
+    return '<section class="card"><h2>3e pilier</h2>' +
+      '<p class="obj num">Objectif : ' + chf(PLAFOND_3A) + ' CHF par an chacun, soit ' + chf(obj) + ' CHF par mois</p>' +
+      '<table class="f-tab num"><thead><tr><th></th><th>Par mois</th><th>Sur l’année</th><th>À compléter</th></tr></thead><tbody>' +
+      rs.map(r => { const an = r.budget * 12, gap = PLAFOND_3A - an;
+        return '<tr data-fact="' + r.id + '"><td><b class="' + r.type + '-t">' + esc(r.type) + '</b></td><td>' + chf(r.budget) + '</td><td>' + chf(an) + '</td><td>' + (gap > 0.005 ? '<b>' + chf(gap) + '</b>' : gap < -0.005 ? "dépasse de " + chf(-gap) : "✓") + '</td></tr>' }).join("") +
+      '</tbody></table><p class="note">« À compléter » : le versement à ajouter en décembre pour atteindre le plafond. Si vous changez la mensualité, ce montant s’adapte.</p></section>';
   }
 
   // Qui règle quelle facture, et le virement mensuel qui en découle
   function viewPaiements(m) {
-    const v = Math.round(m.virement * 100) / 100, communes = m.rows.filter(r => r.type === "commune").sort((a, b) => b.budget - a.budget);
+    const v = Math.round(m.virement * 100) / 100, communes = m.rows.filter(r => SHARED(r.type)).sort((a, b) => b.budget - a.budget);
     let h = '<section class="card"><h2>Virement mensuel</h2>';
     if (m.sansPayeur) h += '<p>Indiquez qui paie chaque facture commune (<b>' + m.sansPayeur + '</b> sans payeur), ou laissez-moi proposer une organisation.</p>';
     else if (Math.abs(v) < 0.05) h += '<p>Pas de virement nécessaire : chacun paie exactement sa part.</p>';
@@ -142,23 +185,30 @@ export function budgetModule(ctx) {
     h += '<table class="f-tab num"><thead><tr><th>Facture commune</th><th>Par mois</th><th>Payé par</th></tr></thead><tbody>' +
       communes.map(r => '<tr><td><button class="f-name" data-fact="' + r.id + '"><b>' + esc(r.nom) + '</b><small>' + esc(r.cat) + (r.freq === "an" ? " · " + chf(r.montant) + " / an" : "") + '</small></button></td><td>' + chf(r.budget) + '</td>' +
         '<td><button class="payer ' + (r.payePar || "none") + '" data-payer="' + r.id + '">' + (r.payePar || "?") + '</button></td></tr>').join("") + '</tbody>' +
-      '<tfoot><tr><th>Papa règle</th><td colspan="2">' + chf(m.paid.Papa) + ' <small>(sa part : ' + chf(m.owed.Papa) + ')</small></td></tr>' +
-      '<tr><th>Maman règle</th><td colspan="2">' + chf(m.paid.Maman) + ' <small>(sa part : ' + chf(m.owed.Maman) + ')</small></td></tr></tfoot></table>' +
-      '<p class="note">Touchez « Papa » ou « Maman » pour changer qui paie. Les factures individuelles sont réglées par leur titulaire. Pour une facture annuelle, le payeur met de côté le montant lissé chaque mois.</p>';
+      '<tfoot><tr><th>Factures réglées par Papa</th><td colspan="2">' + chf(m.paid.Papa) + ' <small>(sa part : ' + chf(m.owed.Papa) + ')</small></td></tr>' +
+      '<tr><th>Factures réglées par Maman</th><td colspan="2">' + chf(m.paid.Maman) + ' <small>(sa part : ' + chf(m.owed.Maman) + ')</small></td></tr></tfoot></table>' +
+      '<p class="note">Touchez « Papa » ou « Maman » pour changer qui règle la facture. Les factures individuelles sont réglées par leur titulaire.</p>';
+    // Versements sur les comptes communs
+    const c = m.cpt, t = k => c.mois[k] + c.an[k];
+    h += '<section class="card"><h2>Versements mensuels de chacun</h2>' +
+      '<table class="b-tab num"><thead><tr><th></th><th class="Papa">Papa</th><th class="Maman">Maman</th><th>Total</th></tr></thead><tbody>' +
+      '<tr><td>Compte des dépenses mensuelles</td><td>' + chf(c.mois.Papa) + '</td><td>' + chf(c.mois.Maman) + '</td><td>' + chf(c.mois.Papa + c.mois.Maman) + '</td></tr>' +
+      '<tr><td>Compte des factures annuelles</td><td>' + chf(c.an.Papa) + '</td><td>' + chf(c.an.Maman) + '</td><td>' + chf(c.an.Papa + c.an.Maman) + '</td></tr>' +
+      '<tr class="tot"><td>Total à verser</td><td>' + chf(t("Papa")) + '</td><td>' + chf(t("Maman")) + '</td><td>' + chf(t("Papa") + t("Maman")) + '</td></tr></tbody></table>' +
+      '<p class="note">Possibilité de verser ces sommes chaque mois sur deux comptes communs : l’un paie les factures du mois, l’autre accumule de quoi régler les factures annuelles quand elles tombent. Plus besoin de virements entre vous.</p></section>';
     return h;
   }
 
   function viewGraph(m) {
     const byCat = {};
-    m.rows.filter(r => r.type === "commune").forEach(r => { const k = SLOT[r.cat] ? r.cat : "Autres"; byCat[k] = (byCat[k] || 0) + r.budget });
+    m.rows.filter(r => SHARED(r.type)).forEach(r => { const c = r.cat === "Maison du Sud" ? "Logement" : r.cat, k = SLOT[c] ? c : "Autres"; byCat[k] = (byCat[k] || 0) + r.budget });
     const parts = Object.entries(byCat).sort((a, b) => (SLOT[a[0]] || 99) - (SLOT[b[0]] || 99)).map(([k, v]) => ({ k, v, c: k === "Autres" ? "var(--s-other)" : colorOf(k) }));
-    return '<section class="card"><h2>Où va l’argent commun</h2>' + donut(parts, "Répartition des dépenses communes par catégorie") + '</section>' +
-      '<section class="card"><h2>Participation aux communes</h2>' + donut([{ k: "Papa", v: m.com.Papa, c: "var(--papa)" }, { k: "Maman", v: m.com.Maman, c: "var(--maman)" }], "Participation de chacun aux dépenses communes") + '</section>';
+    return '<section class="card"><h2>Où va l’argent commun</h2>' + donut(parts, "Répartition des dépenses communes par catégorie") + '</section>' + financeCard(m);
   }
 
   /* ---- Organisation proposée : chaque facture va à qui a le plus de part restant à couvrir ---- */
   function proposal(m) {
-    const communes = m.rows.filter(r => r.type === "commune" && r.freq !== "ponctuel").sort((a, b) => b.budget - a.budget);
+    const communes = m.rows.filter(r => SHARED(r.type) && r.freq !== "ponctuel").sort((a, b) => b.budget - a.budget);
     const target = { Papa: 0, Maman: 0 }; communes.forEach(r => { target.Papa += r.part.Papa; target.Maman += r.part.Maman });
     const got = { Papa: 0, Maman: 0 }, plan = {};
     communes.forEach(r => { const who = (target.Papa - got.Papa) >= (target.Maman - got.Maman) ? "Papa" : "Maman"; plan[r.id] = who; got[who] += r.budget });
@@ -193,7 +243,7 @@ export function budgetModule(ctx) {
       '<div id="bPonct"' + (f.freq === "ponctuel" ? "" : " hidden") + '><label class="f" for="bmo">Mois</label><input class="t" id="bmo" type="month" value="' + esc(f.mois || ym) + '"></div>' +
       '<div class="two"><div><label class="f" for="bc">Catégorie</label><select class="t" id="bc">' + catOpts + '</select></div>' +
       '<div><label class="f" for="bs">Détail</label><select class="t" id="bs">' + sousOpts(f.cat) + '</select></div></div>' +
-      '<div class="two"><div><label class="f" for="bt">Répartition</label><select class="t" id="bt"><option value="commune"' + (f.type === "commune" ? " selected" : "") + '>Commune (prorata)</option><option value="Papa"' + (f.type === "Papa" ? " selected" : "") + '>Individuelle Papa</option><option value="Maman"' + (f.type === "Maman" ? " selected" : "") + '>Individuelle Maman</option></select></div>' +
+      '<div class="two"><div><label class="f" for="bt">Répartition</label><select class="t" id="bt"><option value="commune"' + (f.type === "commune" ? " selected" : "") + '>Commune (prorata)</option><option value="egal"' + (f.type === "egal" ? " selected" : "") + '>Commune (50/50)</option><option value="Papa"' + (f.type === "Papa" ? " selected" : "") + '>Individuelle Papa</option><option value="Maman"' + (f.type === "Maman" ? " selected" : "") + '>Individuelle Maman</option></select></div>' +
       '<div><label class="f" for="bp">Payé par</label><select class="t" id="bp"><option value="">— ?</option><option' + (f.payePar === "Papa" ? " selected" : "") + '>Papa</option><option' + (f.payePar === "Maman" ? " selected" : "") + '>Maman</option></select></div></div>' +
       (f.freq !== "ponctuel" && id ? '<label class="f" for="bfin">Dernier mois (si la facture s’arrête)</label><input class="t" id="bfin" type="month" value="' + esc(f.fin || "") + '">' : "") +
       '<label class="f" for="bno">Note</label><input class="t" id="bno" value="' + esc(f.note || "") + '">' +

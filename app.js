@@ -586,7 +586,7 @@ $("#toastUndo").addEventListener("click", () => { $("#toast").hidden = true; und
 
 /* ---------- Clics ---------- */
 document.addEventListener("click", e => {
-  const t = e.target.closest("button"); if (!t || t.closest("#sheet") && !t.dataset.recipe) return;
+  const t = e.target.closest("button") || e.target.closest("tr[data-fact]"); if (!t || t.closest("#sheet") && !t.dataset.recipe) return;
   const ds = t.dataset;
   if (tab === "budget" && t.id === "add") return budget.add();
   if (tab === "budget" && budget.click(t)) return;
