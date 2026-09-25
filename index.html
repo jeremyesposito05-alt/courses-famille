@@ -178,6 +178,18 @@ ul.hist small{color:var(--muted)}
 .sim-tab td:first-child{white-space:normal;min-width:110px}
 input.sim{width:88px;display:inline-block;margin:0;padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums}
 #simEffect{line-height:1.8}
+/* projets */
+.proj{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px;box-shadow:inset 4px 0 0 var(--rc)}
+.proj-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.proj-head b{font-size:1.05rem}
+.proj-amt{text-align:right;white-space:nowrap} .proj-amt b{font-size:1.1rem} .proj-amt small{display:block;color:var(--muted);font-size:.75rem}
+.durees{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.dur{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.dur span{font-size:.72rem;color:var(--muted)} .dur b{font-size:.82rem}
+.dur.on{border-color:var(--rc);background:var(--sel);box-shadow:inset 0 0 0 1px var(--rc)}
+.proj-res{margin:10px 0 0;font-size:.92rem}
+.proj .actions{margin-top:10px}
+
 /* menus par semaine */
 .wnav{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin-top:14px;text-align:center}
 .wnav b{display:block;font-family:var(--serif);font-weight:400;font-size:1.1rem}

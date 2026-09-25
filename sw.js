@@ -1,6 +1,6 @@
 // Service worker : l'appli s'ouvre même sans réseau (au fond du magasin).
 // Les données de la liste passent par Firebase, qui a son propre cache hors ligne.
-const VERSION = 'courses-v11';
+const VERSION = 'courses-v12';
 const SHELL = ['./', 'index.html', 'app.js', 'budget.js', 'recettes.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

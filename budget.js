@@ -41,6 +41,75 @@ export function budgetModule(ctx) {
     unsubs.forEach(u => u()); unsubs.length = 0;
     unsubs.push(onSnapshot(collection(fs, "familles", code(), "factures"), s => { factures = {}; s.forEach(d => { factures[d.id] = d.data() }); loaded = true; refresh() }, () => {}));
     unsubs.push(onSnapshot(fam("budget", "config"), s => { config = s.exists() ? s.data() : { revenus: { Papa: 0, Maman: 0 } }; refresh() }, () => {}));
+    unsubs.push(onSnapshot(collection(fs, "familles", code(), "projets"), s => { projets = {}; s.forEach(d => { projets[d.id] = d.data() }); refresh() }, () => {}));
+  }
+
+  /* ---- Projets personnels : combien mettre de côté par mois pour financer un achat ---- */
+  let projets = {};
+  const PCATS = ["Loisirs", "Maison", "Famille", "Voiture", "Vacances", "Enfants", "Santé", "Autre"];
+  const PCOL = { "Loisirs": "var(--s6)", "Maison": "var(--s1)", "Famille": "var(--s5)", "Voiture": "var(--s2)", "Vacances": "var(--s3)", "Enfants": "var(--s7)", "Santé": "var(--s4)", "Autre": "var(--s-other)" };
+  const POUR = { Papa: "Papa", Maman: "Maman", commune: "Commun (prorata)", egal: "Commun (50/50)" };
+  const DUREES = [3, 4, 6, 10, 12];
+  const pref = id => doc(fs, "familles", code(), "projets", id);
+  const addMonths = (ymS, n) => { const d = new Date(ymS + "-15"); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 7) };
+  const ymLbl = s => { const d = new Date(s + "-15"); return MOIS_L[d.getMonth()] + " " + d.getFullYear() };
+  const reste = p => Math.max(0, (Number(p.montant) || 0) - (Number(p.deja) || 0));
+  const parMois = (p, n) => Math.ceil(reste(p) / n * 20) / 20;   // arrondi aux 5 centimes supérieurs
+  function projetsHtml() {
+    const rt = ratio(), list = Object.entries(projets).sort((a, b) => (a[1].cree || 0) - (b[1].cree || 0));
+    const split = (p, v) => p.pour === "commune" ? " · Papa " + chf(v * rt.Papa) + " / Maman " + chf(v * rt.Maman) : p.pour === "egal" ? " · " + chf(v / 2) + " chacun" : "";
+    return '<section class="card"><div class="b-head"><h2>Mes projets</h2><button class="btn" data-b="projadd">+ Nouveau projet</button></div>' +
+      (list.length ? "" : '<p class="note">Un vélo, un canapé, une console, une voiture… Ajoutez un projet pour voir combien mettre de côté chaque mois.</p>') +
+      list.map(([id, p]) => {
+        const n = Number(p.mois) || 6, v = parMois(p, n);
+        return '<article class="proj" style="--rc:' + (PCOL[p.cat] || "var(--s-other)") + '">' +
+          '<div class="proj-head"><div><b>' + esc(p.nom) + '</b><span class="tags"><span class="tag" style="background:var(--chip);color:var(--rc)">' + esc(p.cat || "Autre") + '</span><span class="tag ' + (p.pour === "Papa" || p.pour === "Maman" ? p.pour : "") + '">' + esc(POUR[p.pour] || "") + '</span></span></div>' +
+          '<div class="num proj-amt"><b>' + chf(p.montant) + '</b>' + (Number(p.deja) ? '<small>déjà ' + chf(p.deja) + ' · reste ' + chf(reste(p)) + '</small>' : "") + '</div></div>' +
+          '<div class="durees" role="group" aria-label="Durée de financement">' + DUREES.map(k => '<button class="dur' + (k === n ? " on" : "") + '" data-pdur="' + id + ':' + k + '"><span>' + k + ' mois</span><b class="num">' + chf(parMois(p, k)) + '</b></button>').join("") + '</div>' +
+          '<p class="proj-res num">En <b>' + n + ' mois</b> : <b>' + chf(v) + ' CHF par mois</b>' + split(p, v) + '</p>' +
+          (p.facture ? '<p class="note">✓ Programmé dans le budget de ' + esc(ymLbl(p.debut)) + ' à ' + esc(ymLbl(addMonths(p.debut, n - 1))) + '.</p>' : "") +
+          (p.note ? '<p class="note">' + esc(p.note) + '</p>' : "") +
+          '<div class="actions"><button class="btn" data-pedit="' + id + '">Modifier</button>' + (p.facture ? '<button class="btn" data-punplan="' + id + '">Retirer du budget</button>' : '<button class="btn primary" data-pplan="' + id + '">Programmer dans le budget</button>') + '</div></article>';
+      }).join("") + '</section>';
+  }
+  function projetSheet(id) {
+    const p = id ? projets[id] : { nom: "", montant: "", deja: "", cat: "Loisirs", pour: me(), mois: 6, note: "" };
+    openSheet('<form data-form="projet" data-id="' + (id || "") + '"><div class="sheet-head"><h2>' + (id ? "Modifier le projet" : "Nouveau projet") + '</h2><button type="button" class="x" aria-label="Fermer">×</button></div>' +
+      '<label class="f" for="pn">Projet</label><input class="t" id="pn" required value="' + esc(p.nom) + '" placeholder="ex. Vélo, canapé, console…">' +
+      '<div class="two"><div><label class="f" for="pm">Prix CHF</label><input class="t" id="pm" type="number" step="1" min="0" inputmode="decimal" required value="' + esc(p.montant) + '"></div>' +
+      '<div><label class="f" for="pd">Déjà mis de côté</label><input class="t" id="pd" type="number" step="1" min="0" inputmode="decimal" value="' + esc(p.deja || "") + '" placeholder="0"></div></div>' +
+      '<div class="two"><div><label class="f" for="pc">Catégorie</label><select class="t" id="pc">' + PCATS.map(c => '<option' + (c === p.cat ? " selected" : "") + '>' + c + '</option>').join("") + '</select></div>' +
+      '<div><label class="f" for="pp">Pour</label><select class="t" id="pp">' + Object.entries(POUR).map(([k, t]) => '<option value="' + k + '"' + (k === p.pour ? " selected" : "") + '>' + t + '</option>').join("") + '</select></div></div>' +
+      '<label class="f" for="pmo">Durée de financement (mois)</label><input class="t" id="pmo" type="number" step="1" min="1" max="120" inputmode="numeric" value="' + esc(p.mois || 6) + '">' +
+      '<label class="f" for="pno">Note</label><input class="t" id="pno" value="' + esc(p.note || "") + '" placeholder="ex. modèle, magasin, lien…">' +
+      '<div class="actions">' + (id ? '<button type="button" class="btn danger" data-b="projdel">Supprimer</button>' : "") + '<button class="btn primary">' + (id ? "Enregistrer" : "Ajouter") + '</button></div></form>');
+  }
+  function projetSubmit(form) {
+    const q = s => ctx.sheet.querySelector(s), id = form.dataset.id, num = s => Math.max(0, Number(String(q(s).value).replace(",", ".")) || 0);
+    if (!q("#pn").value.trim() || !num("#pm")) return;
+    const data = { nom: q("#pn").value.trim(), montant: num("#pm"), deja: num("#pd"), cat: q("#pc").value, pour: q("#pp").value, mois: Math.max(1, Math.round(num("#pmo")) || 6), note: q("#pno").value.trim(), maj: Date.now(), modifPar: me() };
+    const ref = id ? pref(id) : doc(collection(fs, "familles", code(), "projets"));
+    if (!id) data.cree = Date.now();
+    projets[ref.id] = Object.assign({}, projets[ref.id] || {}, data);
+    (id ? updateDoc(ref, data) : setDoc(ref, data)).catch(fail);
+    if (id && projets[id].facture) planProjet(id, true);   // la mensualité programmée suit la modification
+    closeSheet(); toast(id ? "Projet modifié" : "Projet ajouté");
+  }
+  // Programme la mensualité comme une épargne du budget, de ce mois jusqu'à la fin de la durée choisie
+  function planProjet(id, silent) {
+    const p = projets[id], n = Number(p.mois) || 6, debut = p.facture && p.debut ? p.debut : ym;
+    const fid = p.facture || "projet-" + id;
+    const f = { nom: "Projet : " + p.nom, montant: parMois(p, n), freq: "mois", cat: "Épargne", sous: "", type: p.pour, payePar: p.pour === "Papa" || p.pour === "Maman" ? p.pour : "",
+      note: "Pour financer " + p.nom + " (" + chf(p.montant) + " CHF)", debut, fin: addMonths(debut, n - 1), maj: Date.now(), par: me() };
+    factures[fid] = f; setDoc(fref(fid), f).catch(fail);
+    projets[id] = Object.assign({}, p, { facture: fid, debut }); updateDoc(pref(id), { facture: fid, debut }).catch(fail);
+    if (!silent) { rerender(); toast("Programmé : " + chf(f.montant) + " CHF par mois pendant " + n + " mois") }
+  }
+  function unplanProjet(id) {
+    const p = projets[id]; if (!p || !p.facture) return;
+    deleteDoc(fref(p.facture)).catch(fail); delete factures[p.facture];
+    projets[id] = Object.assign({}, p, { facture: null }); updateDoc(pref(id), { facture: null }).catch(fail);
+    rerender(); toast("Retiré du budget");
   }
 
   /* ---- Calcul du mois (montants mensuels : les annuelles sont lissées) ---- */
@@ -163,7 +232,7 @@ export function budgetModule(ctx) {
 
   /* ---- Avenir : simulation de l'épargne et de la prévoyance ---- */
   let sim = {}, rate = 0;
-  const simLines = () => month().rows.filter(r => (r.cat === "Épargne" || r.cat === "Prévoyance") && r.freq === "mois");
+  const simLines = () => month().rows.filter(r => (r.cat === "Épargne" || r.cat === "Prévoyance") && r.freq === "mois" && !r.id.startsWith("projet-"));
   const fv = (pm, years) => { const i = rate / 100 / 12, n = years * 12; return i ? pm * ((Math.pow(1 + i, n) - 1) / i) : pm * n };
   function viewAvenir(m) {
     const lines = simLines(), ep = lines.filter(r => r.cat === "Épargne"), pv = lines.filter(r => r.cat === "Prévoyance");
@@ -182,7 +251,8 @@ export function budgetModule(ctx) {
       '<p class="note">« À compléter » : ce qu’il faut verser en plus avant la fin de l’année pour atteindre le plafond.</p>' +
       '<button class="btn wide" data-b="3amax">Régler les deux au plafond (' + chf(PLAFOND_3A / 12) + ' / mois)</button></section>' +
       '<section class="card"><h2>Effet sur le budget</h2><p id="simEffect" class="num"></p>' +
-      '<div class="actions"><button class="btn" data-b="simreset">Revenir aux montants actuels</button><button class="btn primary" data-b="simapply">Appliquer au budget</button></div></section>';
+      '<div class="actions"><button class="btn" data-b="simreset">Revenir aux montants actuels</button><button class="btn primary" data-b="simapply">Appliquer au budget</button></div></section>' +
+      projetsHtml();
   }
   function simUpdate() {
     const lines = simLines(), rt = ratio(); if (!document.getElementById("simEffect")) return;
@@ -317,18 +387,35 @@ export function budgetModule(ctx) {
     if (d.b === "sal") { salSheet(); return true }
     if (d.b === "propose") { proposeSheet(); return true }
     if (d.b === "simapply") { simApply(t); return true }
+    if (d.b === "projadd") { projetSheet(null); return true }
+    if (d.pedit) { projetSheet(d.pedit); return true }
+    if (d.pplan) { planProjet(d.pplan); return true }
+    if (d.punplan) { unplanProjet(d.punplan); return true }
+    if (d.pdur) {
+      const [id, n] = d.pdur.split(":"), p = projets[id]; if (!p) return true;
+      p.mois = Number(n); updateDoc(pref(id), { mois: p.mois, maj: Date.now() }).catch(fail);
+      if (p.facture) planProjet(id, true);
+      rerender(); return true;
+    }
     if (d.b === "simreset") { sim = {}; rate = 0; rerender(); return true }
     if (d.b === "3amax") { simLines().filter(r => r.cat === "Prévoyance").forEach(r => { sim[r.id] = Math.round(PLAFOND_3A / 12 * 100) / 100 }); rerender(); return true }
     return false;
   }
   function sheetClick(t) {
     if (t.dataset.b === "apply") { applyProposal(); return true }
+    if (t.dataset.b === "projdel") {
+      if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Confirmer la suppression"; return true }
+      const id = t.closest("form").dataset.id, p = projets[id];
+      if (p && p.facture) { deleteDoc(fref(p.facture)).catch(fail); delete factures[p.facture] }
+      deleteDoc(pref(id)).catch(fail); delete projets[id]; closeSheet(); toast("Projet supprimé"); return true;
+    }
     if (t.dataset.b !== "del") return false;
     if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Confirmer la suppression"; return true }
     const id = t.closest("form").dataset.id; deleteDoc(fref(id)).catch(fail); delete factures[id]; closeSheet(); toast("Facture supprimée"); return true;
   }
   function submitAny(form) {
     if (form.dataset.form === "facture") { submit(form); return true }
+    if (form.dataset.form === "projet") { projetSubmit(form); return true }
     if (form.dataset.form === "salaires") {
       const p = Number(ctx.sheet.querySelector("#sp").value) || 0, m = Number(ctx.sheet.querySelector("#sm").value) || 0;
       config = Object.assign({}, config, { revenus: { Papa: p, Maman: m } });
