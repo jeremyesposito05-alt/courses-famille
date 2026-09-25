@@ -156,6 +156,26 @@ ul.hist small{color:var(--muted)}
 .b-amt{font-weight:700;text-align:right;white-space:nowrap}
 .b-amt small{font-weight:400}
 .tag.warn{background:var(--alert-bg);color:var(--alert-ink)}
+.b-go{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px}
+.b-go .btn{font-size:.85rem;padding:12px 6px}
+.f-tab{width:100%;border-collapse:collapse;margin-top:12px;font-size:.9rem}
+.f-tab th,.f-tab td{padding:8px 4px;text-align:right;vertical-align:top;border-bottom:1px solid var(--line)}
+.f-tab th:first-child,.f-tab td:first-child{text-align:left}
+.f-tab thead th{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);position:sticky;top:0;background:var(--bg)}
+.f-tab thead th.Papa{color:var(--papa)} .f-tab thead th.Maman{color:var(--maman)}
+.f-tab .f-cat th,.f-tab .f-cat td{font-weight:700;padding-top:16px;border-bottom:2px solid var(--rc);color:var(--ink)}
+.f-tab .f-cat th{color:var(--rc)}
+.f-tab tbody td:first-child{box-shadow:inset 3px 0 0 var(--rc);padding-left:8px}
+.f-tab .f-cat th{box-shadow:none;padding-left:0}
+.f-name{border:0;background:none;padding:0;text-align:left;width:100%}
+.f-name b{display:block;font-weight:700} .f-name small{display:block;color:var(--muted);font-size:.78rem}
+.f-tab tfoot th,.f-tab tfoot td{font-weight:700;border-bottom:0;padding-top:12px;font-size:.95rem}
+.f-tab tfoot small{font-weight:400;color:var(--muted)}
+.payer{border:0;border-radius:999px;padding:4px 12px;font-weight:700;font-size:.82rem;min-width:70px}
+.payer.Papa{background:var(--papa-bg);color:var(--papa)} .payer.Maman{background:var(--maman-bg);color:var(--maman)} .payer.none{background:var(--alert-bg);color:var(--alert-ink)}
+ul.plan{list-style:none;padding:0;margin:4px 0 0}
+ul.plan li{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.Papa-t{color:var(--papa)} .Maman-t{color:var(--maman)}
 
 /* modification des menus */
 .meal .by{display:inline-block;font-size:.68rem;font-weight:700;border-radius:4px;padding:0 5px;margin-left:4px}
