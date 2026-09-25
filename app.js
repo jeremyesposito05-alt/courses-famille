@@ -84,7 +84,19 @@ const col = (...p) => collection(fs, "familles", code, ...p);
 const art = id => fam("articles", id);
 const perRef = () => fam("periodes", pid);
 const trips = () => Object.entries((per && per.trips) || {}).map(([id, t]) => Object.assign({ id }, t)).sort((a, b) => (a.o || 0) - (b.o || 0) || (a.date || "").localeCompare(b.date || ""));
-const slots = () => ((per && per.slots) || []);
+// Menus : semaines de calendrier (lundi → dimanche), un document par semaine dans « semaines »
+let weeks = {}, wkChosen = false;
+const mondayOf = s => addDays(s, -((dt(s).getDay() + 6) % 7));
+let wk = mondayOf(today());
+const weekSlots = mon => {
+  const w = weeks[mon] || {}, out = [];
+  for (let i = 0; i < 7; i++) { const day = addDays(mon, i); WEEK[dt(day).getDay()].forEach(([k, repas, c]) => { const id = day + "-" + k; out.push({ id, repas, c: (w.contraintes || {})[id] || c }) }) }
+  return out;
+};
+const slotData = id => { const w = weeks[mondayOf(id.slice(0, 10))] || {}; return { v: (w.choix || {})[id] || "", note: (w.notes || {})[id] || "", by: (w.par || {})[id] || "" } };
+const slotTitle = id => { const s = slotData(id), r = R[s.v]; return r ? r.nom : s.v.startsWith("libre:") ? s.v.slice(6) : s.v === "aucun" ? "Pas de repas à préparer" : s.note || "À choisir" };
+const slots = () => weekSlots(mondayOf(today())).concat(weekSlots(addDays(mondayOf(today()), 7)));
+const saveSlots = (mon, data) => setDoc(fam("semaines", mon), Object.assign(data, { maj: Date.now() }), { merge: true }).catch(fail);
 const live = () => Object.entries(items).map(([id, x]) => Object.assign({ id }, x));
 const isNew = x => (x.par === "Papa" || x.par === "Maman") && x.par !== me && (x.maj || 0) > seenAtOpen && seenAtOpen > 0;
 const lastPaid = n => { const k = (n || "").toLowerCase(); return Object.values(hist).filter(h => (h.n || "").toLowerCase() === k).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0] };
@@ -117,6 +129,7 @@ function connect() {
     if (p !== pid) { pid = p; connectPeriod() }
   }, onErr));
   unsubs.push(onSnapshot(col("historique"), snap => { hist = {}; snap.forEach(d => { hist[d.id] = d.data() }) }, () => {}));
+  unsubs.push(onSnapshot(col("semaines"), snap => { weeks = {}; snap.forEach(d => { weeks[d.id] = d.data() }); if (!$("#dlg").open) render() }, () => {}));
   unsubs.push(onSnapshot(col("periodes"), snap => { periods = {}; snap.forEach(d => { const x = d.data(); periods[d.id] = { nom: x.nom, debut: x.debut, fin: x.fin } }); if (tab === "reglages" && !$("#dlg").open) render() }, () => {}));
 }
 function connectPeriod() {
@@ -144,7 +157,7 @@ function alerts() {
   const news = live().filter(isNew);
   if (news.length) out.push({ id: "new-" + news.length, ic: "●", txt: "<b>" + other() + "</b> a ajouté " + news.length + " article" + (news.length > 1 ? "s" : "") + " : " + news.slice(0, 3).map(x => esc(x.n)).join(", ") + (news.length > 3 ? "…" : "") + ' <button class="lnk" data-filter="' + other() + '">Voir</button>' });
   slots().forEach(s => {
-    const day = s.id.slice(0, 10), v = per.choix[s.id], r = R[v];
+    const day = s.id.slice(0, 10), v = slotData(s.id).v, r = R[v];
     if (day === t1 && r && per.debut && between(per.debut, day) >= 3) {
       const frozen = r.ing.filter(i => i[3] === "viande" || /cabillaud/i.test(i[2])).map(i => i[2].replace(/\s*\(.*\)/, ""));
       if (v === "burgers") frozen.push("pains à burger (demain matin)");
@@ -232,9 +245,10 @@ function renderHome() {
   const tr = trips().filter(t => !t.clos), next = tr.find(t => (t.date || "") >= t0) || tr[0];
   const left = next ? live().filter(x => x.c === next.id && !x.coche && x.r !== "placard").length : 0;
   // Menus : les repas du jour, sinon le prochain
-  const title = s => { const v = (per && per.choix[s.id]) || ""; return R[v] ? R[v].nom : v.startsWith("libre:") ? v.slice(6) : v === "aucun" ? "Pas de repas à préparer" : (per && per.notes[s.id]) || "À choisir" };
-  const todays = slots().filter(s => s.id.startsWith(t0)), upcoming = slots().find(s => s.id.slice(0, 10) > t0);
-  const menuSub = !per ? "Chargement…" : todays.length ? todays.map(s => esc(s.repas) + " : " + esc(title(s))).join("<br>") : upcoming ? esc(fmtD(upcoming.id.slice(0, 10))) + " · " + esc(title(upcoming)) : "Aucun repas prévu";
+  const title = s => slotTitle(s.id);
+  const has = s => { const x = slotData(s.id); return x.v || x.note }, all = weekSlots(mondayOf(addDays(t0, -1))).concat(slots());
+  const todays = all.filter(s => s.id.startsWith(t0) && has(s)), upcoming = all.find(s => s.id.slice(0, 10) > t0 && has(s));
+  const menuSub = todays.length ? todays.map(s => esc(s.repas) + " : " + esc(title(s))).join("<br>") : upcoming ? esc(fmtD(upcoming.id.slice(0, 10))) + " · " + esc(title(upcoming)) : "Aucun repas prévu";
   // Budget : ce que chacun verse ce mois
   const bs = budget.summary();
   let h = '<section class="hello"><p class="eyebrow">' + JOURS_LONG[d.getDay()] + " " + d.getDate() + " " + MOIS[d.getMonth()] + '</p><h2>Bonjour ' + esc(me) + '</h2></section>' + alertsHtml() +
@@ -245,7 +259,7 @@ function renderHome() {
       '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
     tile("budget", "Budget", "Versements du mois", bs ? me + " : " + money(bs[me]) + " CHF<br>" + other() + " : " + money(bs[other()]) + " CHF" : "Chargement…", "var(--papa)",
       '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
-    tile("reglages", "Réglages", "Téléphone de " + esc(me), "Quinzaines, historique des prix", "var(--muted)",
+    tile("reglages", "Réglages", "Téléphone de " + esc(me), "Listes, historique des prix", "var(--muted)",
       '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
     '</div><div class="quick"><button class="btn" data-quick="add">+ Ajouter à la liste</button><button class="btn" data-quick="store">Mode magasin</button><button class="btn" data-quick="depense">+ Dépense</button></div>';
   main.innerHTML = h;
@@ -291,18 +305,22 @@ function rowHtml(x) {
 
 function renderMenus() {
   const main = $("#main");
-  if (!per) { main.innerHTML = '<p class="empty">Chargement…</p>'; return }
+  // À l'ouverture : la semaine en cours, ou la suivante si celle-ci n'a encore rien de prévu
+  if (!wkChosen && !weeks[wk] && weeks[addDays(wk, 7)]) wk = addDays(wk, 7);
+  const d0 = dt(wk), d6 = dt(addDays(wk, 6)), sl = weekSlots(wk);
+  const planned = sl.filter(s => slotData(s.id).v).length;
+  const wnum = (() => { const d = dt(addDays(wk, 3)), y0 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - y0) / 864e5 - 3 + (y0.getDay() + 6) % 7) / 7) })();
   let h = alertsHtml();
-  h += '<div class="per-head"><div><h2 class="week" style="margin:0">' + esc(per.nom || "Quinzaine") + '</h2><p class="note">Touchez un repas pour la recette, changer de plat ou ajouter une remarque.</p></div>' +
-    '<button class="btn" id="newPer">Nouvelle quinzaine</button></div>';
-  let week = "";
-  slots().forEach(s => {
+  h += '<div class="wnav"><button class="x" data-wk="-7" aria-label="Semaine précédente">‹</button><div><b>Semaine du ' + d0.getDate() + (d0.getMonth() !== d6.getMonth() ? " " + MOIS[d0.getMonth()] : "") + ' au ' + d6.getDate() + ' ' + MOIS[d6.getMonth()] + '</b>' +
+    '<span class="note">Semaine ' + wnum + ' · ' + planned + ' / ' + sl.length + ' repas prévus' + (wk === mondayOf(today()) ? " · cette semaine" : "") + '</span></div><button class="x" data-wk="7" aria-label="Semaine suivante">›</button></div>' +
+    '<div class="quick"><button class="btn" id="proposeWeek">' + (planned < sl.length ? "Proposer les repas manquants" : "Tous les repas sont prévus ✓") + '</button><button class="btn" id="newList">Créer la liste de courses</button></div>';
+  let day0 = "";
+  sl.forEach(s => {
     const day = s.id.slice(0, 10), d = dt(day);
-    const w = per.debut ? "Semaine " + (Math.floor(between(per.debut, day) / 7) + 1) : "";
-    if (w !== week) { h += '<h2 class="week">' + w + '</h2>'; week = w }
-    const v = per.choix[s.id] || "", r = R[v], note = per.notes[s.id], by = per.par[s.id];
-    const title = r ? r.nom : v.startsWith("libre:") ? v.slice(6) : v === "aucun" ? "Pas de repas à préparer" : (note || "À choisir");
-    h += '<button class="meal' + (day === today() ? " today" : "") + '" data-meal="' + s.id + '"><span class="date"><span class="dow">' + JOURS[d.getDay()] + '</span><span class="dnum">' + d.getDate() + '</span></span>' +
+    if (day !== day0) { day0 = day }
+    const { v, note, by } = slotData(s.id), r = R[v];
+    const title = slotTitle(s.id);
+    h += '<button class="meal' + (day === today() ? " today" : "") + (v ? "" : " empty") + '" data-meal="' + s.id + '"><span class="date"><span class="dow">' + JOURS[d.getDay()] + '</span><span class="dnum">' + d.getDate() + '</span></span>' +
       '<span><span class="c">' + esc(s.repas) + ' · ' + esc(s.c) + '</span><span class="m">' + esc(title) + (by === "Papa" || by === "Maman" ? '<span class="by ' + by + '">modifié par ' + by + '</span>' : "") + '</span>' +
       (r && r.kcal ? '<span class="k num">' + r.actif + ' min actif · ' + r.total + ' min en tout · <b>≈ ' + r.kcal + ' kcal</b></span>' : "") +
       (note && title !== note ? '<span class="k">' + esc(note) + '</span>' : "") + '</span></button>';
@@ -321,9 +339,9 @@ function renderSettings() {
     '<div class="card"><h2>Qui utilise ce téléphone ?</h2><div class="who">' +
     ["Papa", "Maman"].map(p => '<button class="' + p + '" data-me="' + p + '" aria-pressed="' + (me === p) + '">' + p + '</button>').join("") + '</div>' +
     '<p>Vos ajouts portent la pastille « ajouté par ' + me + ' » sur l’autre téléphone.</p></div>' +
-    '<div class="card"><h2>Quinzaines</h2>' + (pers.length ? pers.map(([id, x]) =>
+    '<div class="card"><h2>Listes de courses</h2>' + (pers.length ? pers.map(([id, x]) =>
       '<button class="pline" data-per="' + id + '" aria-pressed="' + (id === pid) + '"><b>' + esc(x.nom || id) + '</b><span>' + (id === pid ? "affichée" : "afficher") + '</span></button>').join("") : '<p>Aucune.</p>') +
-    '<button class="btn wide" id="newPer">Nouvelle quinzaine</button></div>' +
+    '<p class="note">Une nouvelle liste se crée depuis Menus, à partir des repas d’une ou deux semaines.</p></div>' +
     '<div class="card"><h2>Historique des prix payés</h2>' + (histRows.length ? '<p>Saisissez le prix du ticket dans un article (« Prix payé »), puis « Clôturer » la course : les prix sont gardés ici et resservent aux prochaines listes.</p><ul class="hist">' + histRows.map(l =>
       '<li><b>' + esc(l[0].n) + '</b><span class="num">' + l.slice(0, 4).map(x => chf(x.prix) + ' <small>' + short(x.date) + '</small>').join(" · ") + '</span></li>').join("") + '</ul>'
       : '<p>Encore vide. Dans un article, saisissez le « Prix payé » (sur le ticket), puis clôturez la course avec ⋯ : les prix sont enregistrés ici et resservent aux listes suivantes.</p>') + '</div>' +
@@ -444,7 +462,7 @@ function closeTrip(id) {
 
 // Repas : changer de plat
 function mealSheet(slot) {
-  const s = slots().find(x => x.id === slot), v = per.choix[slot] || "", r = R[v], d = dt(slot.slice(0, 10));
+  const s = weekSlots(mondayOf(slot.slice(0, 10))).find(x => x.id === slot), { v, note } = slotData(slot), r = R[v], d = dt(slot.slice(0, 10));
   const groups = {};
   Object.entries(R).filter(([k]) => k !== "restes").forEach(([k, x]) => { (groups[x.type] = groups[x.type] || []).push([k, x]) });
   const opts = Object.entries(groups).map(([t, list]) => '<optgroup label="' + esc(TYPES[t] || t) + '">' +
@@ -454,19 +472,21 @@ function mealSheet(slot) {
     '<label class="f" for="mPick">Changer de plat</label><select class="t" id="mPick"><option value="">— garder le plat actuel —</option>' + opts +
     '<optgroup label="Autre"><option value="libre">Autre plat (à écrire)</option><option value="aucun">Pas de repas à préparer (resto, invités…)</option></optgroup></select>' +
     '<div id="libreBox" hidden><label class="f" for="mLibre">Nom du plat</label><input class="t" id="mLibre" value="' + esc(v.startsWith("libre:") ? v.slice(6) : "") + '" placeholder="ex. Raclette"></div>' +
-    '<label class="f" for="mNote">Remarque</label><textarea class="t" id="mNote" placeholder="ex. préparer la veille, Lana mange à l’école…">' + esc(per.notes[slot] || "") + '</textarea>' +
+    '<label class="f" for="mNote">Remarque</label><textarea class="t" id="mNote" placeholder="ex. préparer la veille, Lana mange à l’école…">' + esc(note) + '</textarea>' +
     '<label class="chk"><input type="checkbox" id="mIng"> Ajouter les ingrédients du nouveau plat à la liste</label>' +
     '<label class="f" for="mTrip">… dans la course</label><select class="t" id="mTrip">' + tripOpts((trips().filter(t => !t.clos && t.date <= slot.slice(0, 10)).slice(-1)[0] || trips().slice(-1)[0] || {}).id) + '</select>' +
     '<div class="actions"><button class="btn primary">Enregistrer</button></div></form>');
 }
 function submitMeal(f) {
   const slot = f.dataset.slot, pick = $("#mPick").value, note = $("#mNote").value.trim();
-  let v = per.choix[slot] || "";
+  const before = slotData(slot).v, mon = mondayOf(slot.slice(0, 10));
+  let v = before;
   if (pick === "libre") { const t = $("#mLibre").value.trim(); if (!t) { $("#mLibre").focus(); return } v = "libre:" + t }
   else if (pick) v = pick;
-  const changed = v !== (per.choix[slot] || "");
-  per.choix[slot] = v; per.notes[slot] = note; per.par[slot] = me;
-  savePer({ choix: { [slot]: v }, notes: { [slot]: note }, par: { [slot]: me } });
+  const changed = v !== before;
+  const w = weeks[mon] = weeks[mon] || {};
+  (w.choix = w.choix || {})[slot] = v; (w.notes = w.notes || {})[slot] = note; (w.par = w.par || {})[slot] = me;
+  saveSlots(mon, { choix: { [slot]: v }, notes: { [slot]: note }, par: { [slot]: me } });
   if ($("#mIng").checked && R[v]) addIngredients(v, slot, $("#mTrip").value);
   closeSheet(); toast(changed ? "Menu modifié" : "Remarque enregistrée");
 }
@@ -481,74 +501,83 @@ function addIngredients(rid, slot, course) {
   setTimeout(() => toast(list.length + " ingrédients ajoutés", true), 2300);
 }
 
-// Nouvelle quinzaine en un geste
-function newPeriodSheet() {
-  const start = per && per.fin ? addDays(per.fin, 1) : today();
-  openSheet('<form data-form="period"><div class="sheet-head"><h2>Nouvelle quinzaine</h2><button type="button" class="x" aria-label="Fermer">×</button></div>' +
-    '<p class="note">Je prépare les repas selon votre semaine type (Stéphanie le lundi, tennis le mercredi, patin le jeudi, ciné le vendredi…), en évitant les plats de la quinzaine précédente, puis la liste de courses rangée par rayon.</p>' +
-    '<div class="two"><div><label class="f" for="pStart">Premier jour</label><input class="t" type="date" id="pStart" value="' + start + '"></div>' +
-    '<div><label class="f" for="pDays">Durée</label><select class="t" id="pDays"><option value="7">1 semaine</option><option value="14" selected>2 semaines</option></select></div></div>' +
-    '<label class="chk"><input type="checkbox" id="pAuto" checked> Proposer les plats automatiquement</label>' +
-    '<label class="chk"><input type="checkbox" id="pList" checked> Créer la liste de courses (grande course + rachat de frais)</label>' +
-    '<p class="note">Vous pourrez tout modifier ensuite. L’ancienne quinzaine reste consultable dans Réglages.</p>' +
-    '<div class="actions"><button class="btn primary">Créer la quinzaine</button></div></form>');
-}
+// Proposer les repas manquants d'une semaine, selon la semaine type, sans reprendre ceux de la semaine précédente
 function pick(pool, avoid, used) {
   const fresh = pool.filter(k => !used.has(k) && !avoid.has(k));
   const ok = fresh.length ? fresh : pool.filter(k => !used.has(k));
   const from = ok.length ? ok : pool;
   return from[Math.floor(Math.random() * from.length)];
 }
-function submitPeriod() {
-  const debut = $("#pStart").value, days = Number($("#pDays").value), auto = $("#pAuto").checked, withList = $("#pList").checked;
-  if (!debut) return;
-  let newPid = debut; while (periods[newPid] || newPid === pid) newPid += "b";
-  const fin = addDays(debut, days - 1);
-  const sl = [], choix = {};
-  const avoid = new Set(Object.values((per && per.choix) || {})), used = new Set();
-  for (let i = 0; i < days; i++) {
-    const day = addDays(debut, i), dow = dt(day).getDay();
-    WEEK[dow].forEach(([k, repas, c]) => {
-      const id = day + "-" + k; sl.push({ id, repas, c });
-      if (auto) { const r = pick(POOL[dow + "-" + k], avoid, used); if (r) { choix[id] = r; used.add(r) } }
+function fillWeek(mon) {
+  const prev = weeks[addDays(mon, -7)] || {}, avoid = new Set(Object.values(prev.choix || {}));
+  const used = new Set(weekSlots(mon).map(s => slotData(s.id).v).filter(Boolean)), choix = {};
+  weekSlots(mon).forEach(s => {
+    if (slotData(s.id).v) return;
+    const dow = dt(s.id.slice(0, 10)).getDay(), k = s.id.slice(11);
+    const r = pick(POOL[dow + "-" + k] || [], avoid, used);
+    if (r) { choix[s.id] = r; used.add(r) }
+  });
+  if (!Object.keys(choix).length) return 0;
+  const w = weeks[mon] = weeks[mon] || {}; w.choix = Object.assign({}, w.choix, choix);
+  saveSlots(mon, { choix });
+  return Object.keys(choix).length;
+}
+function proposeWeek() {
+  const n = fillWeek(wk);
+  render(); toast(n ? n + " repas proposés — touchez-en un pour le changer" : "Tous les repas sont déjà prévus");
+}
+
+// Nouvelle liste de courses à partir des repas d'une ou deux semaines
+function newListSheet() {
+  const sat = addDays(wk, -2), start = sat >= today() ? sat : today();
+  openSheet('<form data-form="liste"><div class="sheet-head"><h2>Nouvelle liste de courses</h2><button type="button" class="x" aria-label="Fermer">×</button></div>' +
+    '<p class="note">Je reprends les repas prévus, j’additionne les ingrédients par rayon et je mets le frais fragile de la fin de période dans un rachat.</p>' +
+    '<div class="two"><div><label class="f" for="lWeeks">Repas de</label><select class="t" id="lWeeks"><option value="1">cette semaine</option><option value="2" selected>cette semaine et la suivante</option></select></div>' +
+    '<div><label class="f" for="lDate">Date de la grande course</label><input class="t" type="date" id="lDate" value="' + start + '"></div></div>' +
+    '<label class="chk"><input type="checkbox" id="lFill" checked> Proposer d’abord les repas manquants</label>' +
+    '<p class="note">La liste actuelle reste consultable dans Réglages.</p>' +
+    '<div class="actions"><button class="btn primary">Créer la liste</button></div></form>');
+}
+function submitList() {
+  const nb = Number($("#lWeeks").value), date = $("#lDate").value || today();
+  if ($("#lFill").checked) for (let i = 0; i < nb; i++) fillWeek(addDays(wk, 7 * i));
+  const debut = wk, fin = addDays(wk, 7 * nb - 1);
+  let newPid = date; while (periods[newPid] || newPid === pid) newPid += "b";
+  const trs = { g: { nom: "Grande course", date, o: 1 } };
+  const rachat = nb > 1 ? addDays(wk, 5) : null;                    // samedi de la 1re semaine
+  if (rachat) trs.r = { nom: "Rachat de frais", date: rachat, o: 2 };
+  const sl = []; for (let i = 0; i < nb; i++) sl.push(...weekSlots(addDays(wk, 7 * i)));
+  const agg = {};
+  sl.forEach(s => {
+    const r = R[slotData(s.id).v]; if (!r) return;
+    const day = s.id.slice(0, 10);
+    r.ing.forEach(([q, u, n, ray]) => {
+      const c = rachat && ray === "fl" && FRAGILE.test(n) && day >= rachat ? "r" : "g";
+      // « Carotte » et « Carottes », « Riz jasmin » et « Riz » : un seul article
+      const norm = n.toLowerCase().replace(/\s*\(.*?\)/g, "").replace(/^(riz|salade|pain de mie)\b.*/, "$1").split(" ").map(w => w.replace(/[sx]$/, "")).join(" ");
+      const key = c + "|" + ray + "|" + norm;
+      const a = agg[key] || (agg[key] = { c, r: ray, n: cap(n), units: {}, uses: [], frz: false });
+      if (n.length > a.n.length && !/\(/.test(n)) a.n = cap(n);
+      if (typeof q === "number") a.units[u] = (a.units[u] || 0) + q;
+      const use = short(day); if (!a.uses.includes(use)) a.uses.push(use);
+      if (ray === "viande" && between(date, day) >= 3) a.frz = true;
     });
-  }
-  const trs = { g: { nom: "Grande course", date: debut, o: 1 } };
-  if (days > 7) trs.r = { nom: "Rachat de frais", date: addDays(debut, 8), o: 2 };
-  const b = writeBatch(fs);
-  const d0 = dt(debut), d1 = dt(fin);
-  b.set(fam("periodes", newPid), { nom: d0.getDate() + " " + MOIS[d0.getMonth()] + " – " + d1.getDate() + " " + MOIS[d1.getMonth()], debut, fin, slots: sl, choix, notes: {}, par: {}, trips: trs, maj: Date.now(), creePar: me });
+  });
+  const b = writeBatch(fs), d0 = dt(debut), d1 = dt(fin);
+  b.set(fam("periodes", newPid), { nom: "Repas du " + d0.getDate() + " " + MOIS[d0.getMonth()] + " au " + d1.getDate() + " " + MOIS[d1.getMonth()], debut: date, fin, trips: trs, maj: Date.now(), creePar: me });
   let count = 0;
-  if (withList) {
-    const agg = {};
-    sl.forEach(s => {
-      const r = R[choix[s.id]]; if (!r) return;
-      const day = s.id.slice(0, 10), idx = between(debut, day);
-      r.ing.forEach(([q, u, n, ray]) => {
-        const c = trs.r && ray === "fl" && FRAGILE.test(n) && idx >= 8 ? "r" : "g";
-        // « Carotte » et « Carottes », « Riz jasmin » et « Riz » : un seul article
-        const norm = n.toLowerCase().replace(/\s*\(.*?\)/g, "").replace(/^(riz|salade|pain de mie)\b.*/, "$1").split(" ").map(w => w.replace(/[sx]$/, "")).join(" ");
-        const key = c + "|" + ray + "|" + norm;
-        const a = agg[key] || (agg[key] = { c, r: ray, n: cap(n), units: {}, uses: [], frz: false });
-        if (n.length > a.n.length && !/\(/.test(n)) a.n = cap(n);
-        if (typeof q === "number") a.units[u] = (a.units[u] || 0) + q;
-        const use = short(day); if (!a.uses.includes(use)) a.uses.push(use);
-        if (ray === "viande" && idx >= 3) a.frz = true;
-      });
-    });
-    Object.values(agg).sort((a, b) => a.n.localeCompare(b.n, "fr")).forEach((a, i) => {
-      const lp = lastPaid(a.n), un = a.units;
-      if (un.kg) { un.g = (un.g || 0) + un.kg * 1000; delete un.kg }
-      if (un.l) { un.dl = (un.dl || 0) + un.l * 10; delete un.l }
-      const q = Object.entries(un).map(([u, n]) => u === "g" && n >= 1000 ? fmtQty(n / 1000) + " kg" : (fmtQty(n) + " " + u).trim()).join(" + ");
-      b.set(doc(col("articles")), { n: a.n, q, p: "", prix: lp ? lp.prix : null, c: a.c, r: a.r,
-        note: "Pour le " + a.uses.join(", "), frz: a.frz, act: false, coche: false, par: "Claude", liste: newPid, o: (i + 1) * 10, maj: Date.now() });
-      count++;
-    });
-  }
+  Object.values(agg).sort((a, b2) => a.n.localeCompare(b2.n, "fr")).forEach((a, i) => {
+    const lp = lastPaid(a.n), un = a.units;
+    if (un.kg) { un.g = (un.g || 0) + un.kg * 1000; delete un.kg }
+    if (un.l) { un.dl = (un.dl || 0) + un.l * 10; delete un.l }
+    const q = Object.entries(un).map(([u, n]) => u === "g" && n >= 1000 ? fmtQty(n / 1000) + " kg" : (fmtQty(n) + " " + u).trim()).join(" + ");
+    b.set(doc(col("articles")), { n: a.n, q, p: "", prix: lp ? lp.prix : null, c: a.c, r: a.r,
+      note: "Pour le " + a.uses.join(", "), frz: a.frz, act: false, coche: false, par: "Claude", liste: newPid, o: (i + 1) * 10, maj: Date.now() });
+    count++;
+  });
   b.set(fam("config", "app"), { periode: newPid }, { merge: true });
-  b.commit().then(() => toast("Quinzaine créée" + (count ? " · " + count + " articles" : ""))).catch(fail);
-  closeSheet(); tab = "menus"; ls.set("tab", tab);
+  b.commit().then(() => toast("Liste créée · " + count + " articles")).catch(fail);
+  closeSheet(); tab = "courses";
 }
 
 // Recettes
@@ -570,7 +599,7 @@ sheet.addEventListener("submit", e => {
   e.preventDefault();
   if (budget.submitAny(e.target)) return;
   const f = e.target.dataset.form;
-  if (f === "item") submitItem(e.target); else if (f === "meal") submitMeal(e.target); else if (f === "period") submitPeriod();
+  if (f === "item") submitItem(e.target); else if (f === "meal") submitMeal(e.target); else if (f === "liste") submitList();
 });
 sheet.addEventListener("change", e => { if (e.target.id === "mPick") $("#libreBox").hidden = e.target.value !== "libre" });
 sheet.addEventListener("click", e => {
@@ -640,8 +669,10 @@ document.addEventListener("click", e => {
   if (t.id === "add") return editor(null);
   if (t.id === "tripsBtn" || t.id === "tripsBtn2") return tripsSheet();
   if (t.id === "storeBtn") return setStore(!store);
-  if (t.id === "newPer") return newPeriodSheet();
-  if (ds.per) { setDoc(fam("config", "app"), { periode: ds.per }, { merge: true }).catch(fail); pid = ds.per; connectPeriod(); tab = "menus"; render(); return }
+  if (t.id === "newList") return newListSheet();
+  if (t.id === "proposeWeek") return proposeWeek();
+  if (ds.wk) { wk = addDays(wk, Number(ds.wk)); wkChosen = true; render(); window.scrollTo(0, 0); return }
+  if (ds.per) { setDoc(fam("config", "app"), { periode: ds.per }, { merge: true }).catch(fail); pid = ds.per; connectPeriod(); tab = "courses"; render(); return }
   if (ds.recipe) return recipe(ds.recipe);
   if (ds.dessert) return dessert(ds.dessert);
   if (ds.me) { me = ds.me; ls.set("me", me); render(); return }
