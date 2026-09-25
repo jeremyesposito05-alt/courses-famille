@@ -17,6 +17,7 @@ export const CATS = {
 };
 const PLAFOND_3A = 7258;   // plafond légal du 3e pilier (salariés avec caisse de pension)
 const SHARED = t => t === "commune" || t === "egal";
+const EPARGNE = r => r.cat === "Épargne" || r.cat === "Prévoyance";   // part vers d'autres comptes, hors factures
 const TYPE_LBL = { commune: "prorata", egal: "50/50", Papa: "individuelle", Maman: "individuelle" };
 const CAT_ORDER = Object.keys(CATS);
 const SLOT = { "Logement": 1, "Impôts": 2, "Enfants": 3, "Santé": 4, "Énergie": 5, "Loisirs": 6, "Alimentation": 7, "Assurances": 8 };
@@ -130,12 +131,15 @@ export function budgetModule(ctx) {
     const sum = (k, filt) => rows.filter(filt).reduce((a, r) => a + r.part[k], 0);
     const com = { Papa: sum("Papa", r => SHARED(r.type)), Maman: sum("Maman", r => SHARED(r.type)) };
     const ind = { Papa: sum("Papa", r => !SHARED(r.type)), Maman: sum("Maman", r => !SHARED(r.type)) };
-    // Comptes communs : dépenses mensuelles d'un côté, factures annuelles (lissées) de l'autre
-    const cpt = { mois: { Papa: sum("Papa", r => SHARED(r.type) && r.freq !== "an"), Maman: sum("Maman", r => SHARED(r.type) && r.freq !== "an") },
-                  an: { Papa: sum("Papa", r => SHARED(r.type) && r.freq === "an"), Maman: sum("Maman", r => SHARED(r.type) && r.freq === "an") } };
-    // Paiements : ce que chacun règle, face à ce qu'il doit ; le reste se compense par un virement
+    // Comptes : factures mensuelles, factures annuelles (lissées), et à part l'épargne et le 3e pilier,
+    // qui partent par ordres permanents vers d'autres comptes
+    const bill = (r, an) => SHARED(r.type) && !EPARGNE(r) && (an ? r.freq === "an" : r.freq !== "an");
+    const cpt = { mois: { Papa: sum("Papa", r => bill(r, false)), Maman: sum("Maman", r => bill(r, false)) },
+                  an: { Papa: sum("Papa", r => bill(r, true)), Maman: sum("Maman", r => bill(r, true)) },
+                  ep: { Papa: sum("Papa", EPARGNE), Maman: sum("Maman", EPARGNE) } };
+    // Paiements : ce que chacun règle, face à ce qu'il doit ; le reste se compense par un virement (hors épargne)
     const paid = { Papa: 0, Maman: 0 }, owed = { Papa: 0, Maman: 0 }; let sansPayeur = 0;
-    rows.forEach(r => {
+    rows.filter(r => !EPARGNE(r)).forEach(r => {
       const payer = SHARED(r.type) ? r.payePar : (r.payePar || r.type);
       if (payer !== "Papa" && payer !== "Maman") { sansPayeur++; return }
       paid[payer] += r.budget; owed.Papa += r.part.Papa; owed.Maman += r.part.Maman;
@@ -221,13 +225,14 @@ export function budgetModule(ctx) {
   }
   // Versements de chacun vers les comptes communs (repris du Résumé et de Paiements)
   function versementsCard(m, withNote) {
-    const c = m.cpt, t = k => c.mois[k] + c.an[k];
+    const c = m.cpt, t = k => c.mois[k] + c.an[k], line = (lbl, o) => '<tr><td>' + lbl + '</td><td>' + chf(o.Papa) + '</td><td>' + chf(o.Maman) + '</td><td>' + chf(o.Papa + o.Maman) + '</td></tr>';
     return '<section class="card"><h2>Versements mensuels de chacun</h2>' +
       '<table class="b-tab num"><thead><tr><th></th><th class="Papa">Papa</th><th class="Maman">Maman</th><th>Total</th></tr></thead><tbody>' +
-      '<tr><td>Compte des dépenses mensuelles</td><td>' + chf(c.mois.Papa) + '</td><td>' + chf(c.mois.Maman) + '</td><td>' + chf(c.mois.Papa + c.mois.Maman) + '</td></tr>' +
-      '<tr><td>Compte des factures annuelles</td><td>' + chf(c.an.Papa) + '</td><td>' + chf(c.an.Maman) + '</td><td>' + chf(c.an.Papa + c.an.Maman) + '</td></tr>' +
-      '<tr class="tot"><td>Total à verser</td><td>' + chf(t("Papa")) + '</td><td>' + chf(t("Maman")) + '</td><td>' + chf(t("Papa") + t("Maman")) + '</td></tr></tbody></table>' +
-      (withNote ? '<p class="note">Possibilité de verser ces sommes chaque mois sur deux comptes communs : l’un paie les factures du mois, l’autre accumule de quoi régler les factures annuelles quand elles tombent. Plus besoin de virements entre vous.</p>' : "") + '</section>';
+      line("Compte des factures mensuelles", c.mois) + line("Compte des factures annuelles", c.an) +
+      '<tr class="tot"><td>Total pour les factures</td><td>' + chf(t("Papa")) + '</td><td>' + chf(t("Maman")) + '</td><td>' + chf(t("Papa") + t("Maman")) + '</td></tr></tbody></table>' +
+      '<h3 class="b-sub">Épargne et 3e pilier <small>(ordres permanents vers d’autres comptes)</small></h3>' +
+      '<table class="b-tab num"><tbody>' + line("Épargne et prévoyance", c.ep) + '</tbody></table>' +
+      (withNote ? '<p class="note">Possibilité de verser les sommes des factures chaque mois sur deux comptes communs : l’un paie les factures du mois, l’autre accumule de quoi régler les factures annuelles quand elles tombent. L’épargne et le 3e pilier partent directement sur leurs propres comptes.</p>' : "") + '</section>';
   }
 
   /* ---- Avenir : simulation de l'épargne et de la prévoyance ---- */
@@ -283,7 +288,7 @@ export function budgetModule(ctx) {
   }
   // Qui règle quelle facture, et le virement mensuel qui en découle
   function viewPaiements(m) {
-    const v = Math.round(m.virement * 100) / 100, communes = m.rows.filter(r => SHARED(r.type)).sort((a, b) => b.budget - a.budget);
+    const v = Math.round(m.virement * 100) / 100, communes = m.rows.filter(r => SHARED(r.type) && !EPARGNE(r)).sort((a, b) => b.budget - a.budget);
     let h = '<section class="card"><h2>Virement mensuel</h2>';
     if (m.sansPayeur) h += '<p>Indiquez qui paie chaque facture commune (<b>' + m.sansPayeur + '</b> sans payeur), ou laissez-moi proposer une organisation.</p>';
     else if (Math.abs(v) < 0.05) h += '<p>Pas de virement nécessaire : chacun paie exactement sa part.</p>';
@@ -307,7 +312,7 @@ export function budgetModule(ctx) {
 
   /* ---- Organisation proposée : chaque facture va à qui a le plus de part restant à couvrir ---- */
   function proposal(m) {
-    const communes = m.rows.filter(r => SHARED(r.type) && r.freq !== "ponctuel").sort((a, b) => b.budget - a.budget);
+    const communes = m.rows.filter(r => SHARED(r.type) && r.freq !== "ponctuel" && !EPARGNE(r)).sort((a, b) => b.budget - a.budget);
     const target = { Papa: 0, Maman: 0 }; communes.forEach(r => { target.Papa += r.part.Papa; target.Maman += r.part.Maman });
     const got = { Papa: 0, Maman: 0 }, plan = {};
     communes.forEach(r => { const who = (target.Papa - got.Papa) >= (target.Maman - got.Maman) ? "Papa" : "Maman"; plan[r.id] = who; got[who] += r.budget });
