@@ -73,7 +73,7 @@ let code = ls.get("code"), me = ls.get("me");
 const seenAtOpen = Number(ls.get("seen") || 0);
 let pid = null, per = null, items = {}, hist = {}, periods = {};
 let loaded = false, offline = false, pending = false;
-let tab = ls.get("tab") || "courses", trip = ls.get("trip") || "", filter = "tout";
+let tab = ["courses", "menus", "budget", "reglages"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil", trip = ls.get("trip") || "", filter = "tout";
 let store = ls.get("store") === "1", wakeLock = null;
 let unsubs = [], unsubPer = [];
 const undoStack = [];
@@ -183,13 +183,14 @@ function render() {
   $("#app").innerHTML = '<header class="top" id="top"></header><main id="main"></main>' +
     ((tab === "courses" && trip) || tab === "budget" ? '<button class="fab" id="add" aria-label="Ajouter un article">+</button>' : "") +
     '<nav class="tabs" role="tablist">' +
+    tabBtn("accueil", "Accueil", '<path d="M3 11 12 4l9 7M5 10v10h14V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
     tabBtn("courses", "Courses", '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
     tabBtn("menus", "Menus", '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
     tabBtn("budget", "Budget", '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
     tabBtn("reglages", "Réglages", '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
     '</nav>';
   renderTop();
-  if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else if (tab === "budget") budget.render($("#main")); else renderSettings();
+  if (tab === "accueil") renderHome(); else if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else if (tab === "budget") budget.render($("#main")); else renderSettings();
 }
 function tabBtn(id, t, svg) {
   const n = id === "courses" && loaded ? alerts().length : 0;
@@ -199,7 +200,7 @@ function tabBtn(id, t, svg) {
 function renderTop() {
   const top = $("#top"); if (!top) return;
   const syncTxt = !loaded ? "Connexion…" : offline ? "Hors ligne" : pending ? "Envoi…" : "Synchronisé";
-  let h = '<div class="top-row"><h1>' + (tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : "Réglages") + '</h1>' +
+  let h = '<div class="top-row"><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : "Réglages") + '</h1>' +
     '<span class="sync' + (offline ? " off" : "") + '"><i></i>' + syncTxt + '</span>' +
     (tab === "courses" ? '<button class="me store-btn" id="storeBtn" aria-pressed="' + store + '">' + (store ? "Quitter" : "Mode magasin") + '</button>' : '<button class="me ' + me + '" data-tab="reglages">' + me + '</button>') + '</div>';
   if (tab === "budget") h += budget.top();
@@ -219,6 +220,35 @@ function renderTop() {
     h += '<div class="summary num"><span><b>' + done + '</b> / ' + buy.length + ' dans le caddie</span><span>' + (paid ? 'payé <b>CHF ' + chf(paid) + '</b> · ' : "") + 'reste ≈ <b>CHF ' + chf(left) + '</b></span></div>';
   }
   top.innerHTML = h;
+}
+
+/* ---------- Accueil : l'essentiel du jour et l'accès à tout ---------- */
+function renderHome() {
+  const main = $("#main"), t0 = today(), d = new Date();
+  const money = n => Number(n || 0).toLocaleString("fr-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const tile = (tabId, title, sub, key, color, svg) => '<button class="tile" data-tab="' + tabId + '" style="--tc:' + color + '"><span class="tile-ic" aria-hidden="true"><svg viewBox="0 0 24 24">' + svg + '</svg></span>' +
+    '<span class="tile-t">' + title + '</span><span class="tile-s">' + sub + '</span>' + (key ? '<span class="tile-k">' + key + '</span>' : "") + '</button>';
+  // Courses : la prochaine course non clôturée
+  const tr = trips().filter(t => !t.clos), next = tr.find(t => (t.date || "") >= t0) || tr[0];
+  const left = next ? live().filter(x => x.c === next.id && !x.coche && x.r !== "placard").length : 0;
+  // Menus : les repas du jour, sinon le prochain
+  const title = s => { const v = (per && per.choix[s.id]) || ""; return R[v] ? R[v].nom : v.startsWith("libre:") ? v.slice(6) : v === "aucun" ? "Pas de repas à préparer" : (per && per.notes[s.id]) || "À choisir" };
+  const todays = slots().filter(s => s.id.startsWith(t0)), upcoming = slots().find(s => s.id.slice(0, 10) > t0);
+  const menuSub = !per ? "Chargement…" : todays.length ? todays.map(s => esc(s.repas) + " : " + esc(title(s))).join("<br>") : upcoming ? esc(fmtD(upcoming.id.slice(0, 10))) + " · " + esc(title(upcoming)) : "Aucun repas prévu";
+  // Budget : ce que chacun verse ce mois
+  const bs = budget.summary();
+  let h = '<section class="hello"><p class="eyebrow">' + JOURS_LONG[d.getDay()] + " " + d.getDate() + " " + MOIS[d.getMonth()] + '</p><h2>Bonjour ' + esc(me) + '</h2></section>' + alertsHtml() +
+    '<div class="tiles">' +
+    tile("courses", "Courses", next ? esc(next.nom) + " · " + esc(fmtD(next.date)) : "Aucune course prévue", next ? left + " article" + (left > 1 ? "s" : "") + " à acheter" : "", "var(--r-fl)",
+      '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
+    tile("menus", "Menus", todays.length ? "Aujourd’hui" : "Prochain repas", menuSub, "var(--courge)",
+      '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
+    tile("budget", "Budget", "Versements du mois", bs ? me + " : " + money(bs[me]) + " CHF<br>" + other() + " : " + money(bs[other()]) + " CHF" : "Chargement…", "var(--papa)",
+      '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
+    tile("reglages", "Réglages", "Téléphone de " + esc(me), "Quinzaines, historique des prix", "var(--muted)",
+      '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
+    '</div><div class="quick"><button class="btn" data-quick="add">+ Ajouter à la liste</button><button class="btn" data-quick="store">Mode magasin</button><button class="btn" data-quick="depense">+ Dépense</button></div>';
+  main.innerHTML = h;
 }
 
 function renderCourses() {
@@ -303,8 +333,8 @@ function renderSettings() {
 
 function renderSetup() {
   document.body.classList.remove("store");
-  $("#app").innerHTML = '<header class="top"><div class="top-row"><h1>Courses famille</h1></div></header><main>' +
-    '<div class="card"><h2>Bienvenue</h2><p>La liste de courses et les menus de la famille, les mêmes sur les deux téléphones.</p>' +
+  $("#app").innerHTML = '<header class="top"><div class="top-row"><h1>Famille</h1></div></header><main>' +
+    '<div class="card"><h2>Bienvenue</h2><p>Courses, menus et budget de la famille, les mêmes sur les deux téléphones.</p>' +
     '<label class="f" for="codeIn">Code famille</label><input class="t" id="codeIn" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(code || "") + '">' +
     '<label class="f">Ce téléphone est celui de…</label><div class="who">' +
     ["Papa", "Maman"].map(p => '<button type="button" class="' + p + '" data-pick="' + p + '" aria-pressed="' + (me === p) + '">' + p + '</button>').join("") + '</div>' +
@@ -591,6 +621,9 @@ document.addEventListener("click", e => {
   if (tab === "budget" && t.id === "add") return budget.add();
   if (tab === "budget" && budget.click(t)) return;
   if (ds.tab) { tab = ds.tab; ls.set("tab", tab); render(); window.scrollTo(0, 0); return }
+  if (ds.quick === "add") { tab = "courses"; render(); return editor(null) }
+  if (ds.quick === "store") { tab = "courses"; return setStore(true) }
+  if (ds.quick === "depense") { tab = "budget"; render(); return budget.add() }
   if (ds.trip) { trip = ds.trip; ls.set("trip", trip); tab = "courses"; render(); return }
   if (ds.filter) { filter = ds.filter; tab = "courses"; render(); return }
   if (ds.dismiss) { const d = dismissed(); d.push(ds.dismiss); ls.set(dismissKey(), JSON.stringify(d)); render(); return }

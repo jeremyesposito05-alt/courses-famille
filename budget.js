@@ -35,7 +35,7 @@ export function budgetModule(ctx) {
   const unsubs = [];
   const chf = n => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("fr-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fail = () => toast("Modification non enregistrée");
-  const refresh = () => { if (ctx.tab() === "budget" && !isOpen()) rerender() };
+  const refresh = () => { if ((ctx.tab() === "budget" || ctx.tab() === "accueil") && !isOpen()) rerender() };
 
   function connect() {
     unsubs.forEach(u => u()); unsubs.length = 0;
@@ -337,5 +337,6 @@ export function budgetModule(ctx) {
     }
     return false;
   }
-  return { connect, render, top, click, sheetClick, submitAny, add: () => editor(null) };
+  const summary = () => { if (!loaded || !config) return null; const m = month(); return { Papa: m.cpt.mois.Papa + m.cpt.an.Papa, Maman: m.cpt.mois.Maman + m.cpt.an.Maman } };
+  return { connect, render, top, click, sheetClick, submitAny, summary, add: () => editor(null) };
 }

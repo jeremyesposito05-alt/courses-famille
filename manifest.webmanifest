@@ -1,7 +1,7 @@
 {
-  "name": "Courses famille",
-  "short_name": "Courses",
-  "description": "Liste de courses et menus de la famille, synchronisés entre les téléphones.",
+  "name": "Famille",
+  "short_name": "Famille",
+  "description": "Courses, menus et budget de la famille, partagés entre les téléphones.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

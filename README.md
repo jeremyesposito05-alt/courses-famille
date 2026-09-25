@@ -1,6 +1,6 @@
-# Courses famille
+# Famille
 
-Liste de courses et menus de la famille, partagés entre deux iPhones.
+Courses, menus et budget de la famille, partagés entre deux iPhones.
 
 - Application web installable (Safari → Partager → Sur l’écran d’accueil), utilisable hors ligne.
 - Données synchronisées en temps réel par Firebase Firestore (serveur à Zurich).
