@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect width="512" height="512" fill="#2F6B4F"/>
+  <!-- panier -->
+  <path d="M112 212h288l-30 170a28 28 0 0 1-27.6 23H169.6a28 28 0 0 1-27.6-23z" fill="#F3F5F1"/>
+  <path d="M176 212l56-92M336 212l-56-92" stroke="#F3F5F1" stroke-width="22" stroke-linecap="round" fill="none"/>
+  <!-- coche -->
+  <path d="M196 305l42 40 82-86" stroke="#2F6B4F" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- carotte -->
+  <path d="M372 96l-58 120 22 10z" fill="#E08A3E"/>
+  <path d="M372 96c10-22 30-30 46-26-8 14-20 22-36 26m-10 0c-4-24 6-42 22-50 4 16-2 34-14 50" fill="#9BD3A8"/>
+</svg>
