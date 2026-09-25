@@ -23,6 +23,8 @@
   --accent:#2F6B4F; --accent-ink:#FFFFFF; --sel:#E4F0E8; --chip:#E9EDE6;
   --papa:#2A6F9B; --papa-bg:#E2EEF6; --maman:#A8416F; --maman-bg:#F6E4EC;
   --courge:#B85B14; --warn:#9A5410; --bad:#A8322D; --good:#2F6B4F;
+  --r-fl:#3E8A5B; --r-viande:#B23A3A; --r-frais:#2A6F9B; --r-boul:#B7832A; --r-epi:#8A5A2B; --r-surg:#2E93AE; --r-placard:#7A807C;
+  --alert-bg:#FFF4E5; --alert-ink:#7A4308;
   --serif:"Young Serif",Georgia,serif;
   --sans:"Atkinson Hyperlegible",-apple-system,"Segoe UI",system-ui,sans-serif;
   --top:env(safe-area-inset-top,0px); --bot:env(safe-area-inset-bottom,0px);
@@ -34,6 +36,8 @@
     --accent:#72C396; --accent-ink:#0E1511; --sel:#1D3227; --chip:#222C26;
     --papa:#7DB8DD; --papa-bg:#1B2D3A; --maman:#E28DB3; --maman-bg:#3A1F2C;
     --courge:#E8914A; --warn:#E6A55C; --bad:#EE8A84; --good:#72C396;
+    --r-fl:#72C396; --r-viande:#EE8A84; --r-frais:#7DB8DD; --r-boul:#E2B85A; --r-epi:#C99A6B; --r-surg:#6FD0E6; --r-placard:#9AA29D;
+    --alert-bg:#3A2A12; --alert-ink:#F5C98A;
   }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -66,13 +70,34 @@ main{padding:0 16px calc(var(--bot) + 96px)}
 .summary{display:flex;justify-content:space-between;gap:8px;font-size:.82rem;color:var(--muted);margin-top:8px}
 .summary b{color:var(--ink)}
 
+.lnk{border:0;background:none;padding:0;font-weight:700;text-decoration:underline;color:inherit;font-size:inherit;font-family:inherit}
 .news{margin:12px 0 0;padding:10px 12px;border-radius:10px;font-size:.9rem;display:flex;gap:10px;align-items:center}
 .news.Papa{background:var(--papa-bg)} .news.Maman{background:var(--maman-bg)}
 .news button{margin-left:auto;border:0;background:none;font-weight:700;text-decoration:underline;padding:0}
 
-.rayon{margin-top:18px}
-.rayon h2{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px;font-weight:700}
-.row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line)}
+.rayon{margin-top:20px}
+.rayon h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--rc);margin:0 0 4px;font-weight:700;display:flex;align-items:center;gap:8px}
+.rayon h2::before{content:"";width:12px;height:12px;border-radius:4px;background:var(--rc)}
+.rayon h2 span{margin-left:auto;color:var(--muted);letter-spacing:0;text-transform:none;font-weight:400}
+.row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:start;padding:11px 0 11px 10px;border-bottom:1px solid var(--line);box-shadow:inset 3px 0 0 var(--rc)}
+
+/* alertes */
+.alerts{margin-top:12px;background:var(--alert-bg);color:var(--alert-ink);border-radius:12px;padding:10px 12px}
+.alerts h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.alerts ul{list-style:none;margin:0;padding:0}
+.alerts li{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid rgba(0,0,0,.08);font-size:.9rem;color:var(--ink)}
+.alerts li:first-child{border-top:0}
+.alerts .ic{flex:none;width:22px;text-align:center}
+.alerts li button{margin-left:auto;flex:none;border:0;background:none;color:var(--muted);font-size:1.1rem;padding:0 2px}
+.badge{position:absolute;top:0;left:calc(50% + 6px);min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:.68rem;line-height:18px;padding:0 5px}
+.tabs button{position:relative}
+.update{position:fixed;left:16px;right:16px;top:calc(var(--top) + 8px);z-index:40;background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:12px 14px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25);text-align:left}
+
+/* modification des menus */
+.meal .by{display:inline-block;font-size:.68rem;font-weight:700;border-radius:4px;padding:0 5px;margin-left:4px}
+.meal .by.Papa{background:var(--papa-bg);color:var(--papa)} .meal .by.Maman{background:var(--maman-bg);color:var(--maman)}
+textarea.t{display:block;width:100%;margin-top:4px;font-size:16px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:70px;resize:vertical}
+.btn.wide{width:100%;margin-top:10px}
 .box{width:26px;height:26px;border-radius:7px;border:2px solid var(--muted);display:grid;place-items:center;margin-top:1px;background:none;padding:0}
 .box[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
 .box[aria-checked="true"]::after{content:"";width:7px;height:13px;border:solid var(--accent-ink);border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-2px)}
@@ -175,8 +200,9 @@ catch (e) { fs = initializeFirestore(app, { localCache: memoryLocalCache() }); }
 
 /* ---------- Constantes ---------- */
 const LISTE = "2026-09-25";
-const TRIPS = { a: "Ven. 25 sept.", b: "Sam. 3 oct.", c: "Crêpes" };
-const TRIPS_LONG = { a: "Vendredi 25 septembre — la grande course", b: "Samedi 3 octobre — rachat de frais", c: "Si crêpes salées vendredi 25" };
+const TRIPS = { a: "Ven. 25 sept.", b: "Sam. 3 oct.", c: "En option" };
+const TRIP_DATE = { a: "2026-09-25", b: "2026-10-03" };
+const TYPES = { volaille: "Volaille", boeuf: "Bœuf", porc: "Porc", poisson: "Poisson", vege: "Végétarien", oeufs: "Œufs" };
 const RAYONS = { fl: "Fruits & légumes", viande: "Viande & poisson", frais: "Frais", boul: "Boulangerie", epi: "Épicerie", surg: "Surgelés", placard: "Placard — à vérifier" };
 const RAY_ORDER = ["fl", "viande", "frais", "boul", "epi", "surg", "placard"];
 const JOURS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
@@ -244,7 +270,7 @@ function connect() {
   }, e => { if (e.code === "permission-denied") { code = null; ls.set("code", ""); render(); toast("Code famille refusé") } }));
   unsubs.push(onSnapshot(doc(fs, "familles", code, "menus", LISTE), snap => {
     if (snap.exists()) menu = Object.assign({ choix: {}, notes: {} }, snap.data());
-    if (tab === "menus" && !$("#dlg").open) render();
+    if (!$("#dlg").open) render();
   }, () => {}));
 }
 
@@ -262,7 +288,8 @@ function render() {
   renderTop();
   if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else renderSettings();
 }
-const tabBtn = (id, t, svg) => '<button role="tab" data-tab="' + id + '" aria-selected="' + (tab === id) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + svg + '</svg>' + t + '</button>';
+const tabBtn = (id, t, svg) => { const n = id === "courses" && loaded ? alerts().length : 0;
+  return '<button role="tab" data-tab="' + id + '" aria-selected="' + (tab === id) + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + svg + '</svg>' + t + (n ? '<span class="badge num">' + n + '</span>' : "") + '</button>' };
 
 function renderTop() {
   const top = $("#top"); if (!top) return;
@@ -276,7 +303,7 @@ function renderTop() {
     const done = buy.filter(x => x.coche).length;
     const total = inTrip.reduce((a, x) => a + (Number(x.prix) || 0), 0);
     const left = buy.filter(x => !x.coche).reduce((a, x) => a + (Number(x.prix) || 0), 0);
-    h += '<div class="seg" role="group" aria-label="Course">' + Object.entries(TRIPS).map(([k, t]) =>
+    h += '<div class="seg" role="group" aria-label="Course">' + Object.entries(TRIPS).filter(([k]) => k !== "c" || trip === "c" || live().some(x => x.c === "c")).map(([k, t]) =>
       '<button data-trip="' + k + '" aria-pressed="' + (trip === k) + '">' + t + ' <span class="num">(' + live().filter(x => x.c === k && x.r !== "placard" && !x.coche).length + ')</span></button>').join("") + '</div>';
     const mine = other();
     h += '<div class="chips" role="group" aria-label="Filtre">' +
@@ -289,22 +316,60 @@ function renderTop() {
 
 const live = () => Object.entries(items).map(([id, x]) => Object.assign({ id }, x)).filter(x => x.liste === LISTE || !x.liste);
 
+/* ---------- Alertes du jour ---------- */
+const iso = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return iso(d) };
+const dismissKey = () => "dismiss." + iso(new Date());
+const dismissed = () => { try { return JSON.parse(ls.get(dismissKey()) || "[]") } catch (e) { return [] } };
+const recipeOf = slot => { const v = menu.choix[slot]; return v && window.R[v] ? window.R[v] : null };
+function alerts() {
+  const today = iso(new Date()), tomorrow = addDays(today, 1), out = [];
+  const news = live().filter(isNew);
+  if (news.length) out.push({ id: "new-" + news.length, ic: "●", txt: "<b>" + other() + "</b> a ajouté " + news.length + " article" + (news.length > 1 ? "s" : "") + " : " + news.slice(0, 3).map(x => esc(x.n)).join(", ") + (news.length > 3 ? "…" : "") + ' <button class="lnk" data-filter="' + other() + '">Voir</button>' });
+  SLOTS.forEach(([id, repas, c]) => {
+    const day = id.slice(0, 10), r = recipeOf(id);
+    if (day === tomorrow && r && day >= "2026-09-30") {
+      const frozen = r.ing.filter(i => i[3] === "viande" || /cabillaud/i.test(i[2])).map(i => i[2].replace(/\s*\(.*\)/, ""));
+      if (menu.choix[id] === "burgers") frozen.push("pains à burger (demain matin)");
+      if (frozen.length) out.push({ id: "thaw-" + id, ic: "❄", txt: "Ce soir : sortir <b>" + esc(frozen.join(", ")) + "</b> du congélateur pour " + esc(r.nom.toLowerCase()) + " (demain " + repas.toLowerCase() + ")" });
+    }
+    if (day === today && /préparer/.test(c)) out.push({ id: "prep-" + id, ic: "⏲", txt: "Aujourd’hui : " + esc(c.slice(c.indexOf("préparer"))) });
+  });
+  ["b"].forEach(k => {
+    const n = live().filter(x => x.c === k && !x.coche).length;
+    if (!n) return;
+    if (TRIP_DATE[k] === today) out.push({ id: "trip-" + k, ic: "🛒", txt: "Aujourd’hui : petit rachat de frais (" + n + " articles) <button class='lnk' data-trip='" + k + "'>Voir</button>" });
+    else if (TRIP_DATE[k] === tomorrow) out.push({ id: "trip-" + k, ic: "🛒", txt: "Demain : petit rachat de frais (" + n + " articles)" });
+  });
+  live().filter(x => x.act && !x.coche).forEach(x => {
+    const m = /jusqu’au (?:\p{L}+ )?(\d{1,2})\.(\d{1,2})/u.exec(x.note || ""); if (!m) return;
+    const end = "2026-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0");
+    if (end === today || end === tomorrow) out.push({ id: "act-" + x.id, ic: "%", txt: "Action « " + esc(x.n) + " » : dernier jour " + (end === today ? "aujourd’hui" : "demain") });
+  });
+  const hide = dismissed();
+  return out.filter(a => !hide.includes(a.id));
+}
+function alertsHtml() {
+  const a = alerts();
+  try { if (navigator.setAppBadge) a.length ? navigator.setAppBadge(a.length) : navigator.clearAppBadge() } catch (e) {}
+  if (!a.length) return "";
+  return '<section class="alerts" aria-label="Alertes"><h2>À savoir aujourd’hui</h2><ul>' + a.map(x =>
+    '<li><span class="ic" aria-hidden="true">' + x.ic + '</span><span>' + x.txt + '</span><button data-dismiss="' + x.id + '" aria-label="Masquer">×</button></li>').join("") + '</ul></section>';
+}
+
 function renderCourses() {
   const main = $("#main");
   if (!loaded) { main.innerHTML = '<p class="empty">Chargement de la liste…</p>'; return }
   let list = live().filter(x => x.c === trip);
-  const news = live().filter(isNew);
-  let h = "";
-  if (news.length && !newsDismissed && filter !== other()) {
-    h += '<div class="news ' + other() + '"><span><b>' + other() + '</b> a ajouté ' + news.length + ' article' + (news.length > 1 ? "s" : "") + ' depuis votre dernière visite.</span><button data-filter="' + other() + '">Voir</button></div>';
-  }
+  let h = alertsHtml();
   if (filter === "reste") list = list.filter(x => !x.coche && x.r !== "placard");
   else if (filter === "Papa" || filter === "Maman") list = list.filter(x => x.par === filter);
   if (!list.length) h += '<p class="empty">' + (filter === "tout" ? "Aucun article. Touchez + pour en ajouter." : "Rien dans ce filtre.") + '</p>';
   RAY_ORDER.forEach(r => {
     const ri = list.filter(x => x.r === r).sort((a, b) => (a.o || 0) - (b.o || 0) || a.n.localeCompare(b.n, "fr"));
     if (!ri.length) return;
-    h += '<section class="rayon"><h2>' + RAYONS[r] + '</h2>' + ri.map(rowHtml).join("") + '</section>';
+    const left = ri.filter(x => !x.coche).length;
+    h += '<section class="rayon" style="--rc:var(--r-' + r + ')"><h2>' + RAYONS[r] + '<span class="num">' + (r === "placard" ? "" : left ? left + " à prendre" : "tout pris ✓") + '</span></h2>' + ri.map(rowHtml).join("") + '</section>';
   });
   main.innerHTML = h;
 }
@@ -325,16 +390,18 @@ function rowHtml(x) {
 }
 
 function renderMenus() {
-  const main = $("#main"); let h = "", week = "";
+  const main = $("#main"); let h = alertsHtml(), week = "";
+  h += '<p class="note" style="margin-top:12px">Touchez un repas pour voir la recette, changer de plat ou ajouter une remarque.</p>';
   SLOTS.forEach(([id, repas, c]) => {
     const d = new Date(id.slice(0, 10) + "T12:00:00");
     const w = id < "2026-09-28" ? "Vendredi 25 septembre" : id < "2026-10-05" ? "Semaine 1" : "Semaine 2";
     if (w !== week) { h += '<h2 class="week">' + w + '</h2>'; week = w }
-    const rid = menu.choix[id], r = rid && window.R[rid], note = menu.notes[id];
-    h += '<button class="meal" ' + (r ? 'data-recipe="' + rid + '"' : (id === "2026-09-25-soir" ? 'data-recipe="crepes"' : "")) + '><span class="date"><span class="dow">' + JOURS[d.getDay()] + '</span><span class="dnum">' + d.getDate() + '</span></span>' +
-      '<span><span class="c">' + repas + ' · ' + esc(c) + '</span><span class="m">' + (r ? esc(r.nom) : esc(note || "Libre")) + '</span>' +
+    const v = menu.choix[id] || "", r = window.R[v], note = menu.notes[id], by = (menu.par || {})[id];
+    const title = r ? r.nom : v.startsWith("libre:") ? v.slice(6) : v === "aucun" ? "Pas de repas à préparer" : (note || "À choisir");
+    h += '<button class="meal" data-meal="' + id + '"><span class="date"><span class="dow">' + JOURS[d.getDay()] + '</span><span class="dnum">' + d.getDate() + '</span></span>' +
+      '<span><span class="c">' + repas + ' · ' + esc(c) + '</span><span class="m">' + esc(title) + (by === "Papa" || by === "Maman" ? '<span class="by ' + by + '">modifié par ' + by + '</span>' : "") + '</span>' +
       (r && r.kcal ? '<span class="k num">' + r.actif + ' min actif · ' + r.total + ' min en tout · <b>≈ ' + r.kcal + ' kcal</b></span>' : "") +
-      (r && note ? '<span class="k">' + esc(note) + '</span>' : "") + '</span></button>';
+      (note && title !== note ? '<span class="k">' + esc(note) + '</span>' : "") + '</span></button>';
   });
   h += '<h2 class="week">Desserts Ninja Creami</h2>' + Object.entries(window.DESSERTS).map(([k, x]) =>
     '<button class="meal" data-dessert="' + k + '"><span class="date"><span class="dnum">❄</span></span><span><span class="m">' + esc(x.nom) + '</span><span class="k">' + esc(x.prep) + '</span></span></button>').join("");
@@ -427,6 +494,53 @@ function dessert(k) {
   openSheet('<div class="sheet-head"><h2>' + esc(x.nom) + '</h2><button class="x" aria-label="Fermer">×</button></div><p class="note">' + esc(x.prep) + ' · sans lactose</p><h3>Ingrédients</h3><ul>' + x.ing.map(i => '<li>' + esc(q(i)) + '</li>').join("") + '</ul><h3>Préparation</h3><ol>' + x.et.map(s => '<li>' + esc(s) + '</li>').join("") + '</ol>');
 }
 
+/* ---------- Modifier un repas ---------- */
+const menuRef = () => doc(fs, "familles", code, "menus", LISTE);
+function mealSheet(slot) {
+  const s = SLOTS.find(x => x[0] === slot), v = menu.choix[slot] || "", r = window.R[v];
+  const d = new Date(slot.slice(0, 10) + "T12:00:00");
+  const groups = {};
+  Object.entries(window.R).filter(([k]) => k !== "restes").forEach(([k, x]) => { (groups[x.type] = groups[x.type] || []).push([k, x]) });
+  const opts = Object.entries(groups).map(([t, list]) => '<optgroup label="' + esc(TYPES[t] || t) + '">' +
+    list.sort((a, b) => a[1].nom.localeCompare(b[1].nom, "fr")).map(([k, x]) => '<option value="' + k + '"' + (k === v ? " selected" : "") + '>' + esc(x.nom) + ' · ' + x.total + ' min</option>').join("") + '</optgroup>').join("");
+  openSheet('<form id="mealForm" data-slot="' + slot + '"><div class="sheet-head"><div><p class="note">' + JOURS[d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth() + 1) + ' · ' + s[1] + ' · ' + esc(s[2]) + '</p><h2>' + esc(r ? r.nom : v.startsWith("libre:") ? v.slice(6) : v === "aucun" ? "Pas de repas à préparer" : "À choisir") + '</h2></div><button type="button" class="x" aria-label="Fermer">×</button></div>' +
+    (r ? '<button type="button" class="btn wide" data-recipe="' + v + '" data-for="' + slot + '">Voir la recette</button>' : "") +
+    '<label class="f" for="mPick">Changer de plat</label><select class="t" id="mPick">' +
+    '<option value="">— garder le plat actuel —</option>' + opts +
+    '<optgroup label="Autre"><option value="libre"' + (v.startsWith("libre:") ? " selected" : "") + '>Autre plat (à écrire)</option><option value="aucun"' + (v === "aucun" ? " selected" : "") + '>Pas de repas à préparer (resto, invités…)</option></optgroup></select>' +
+    '<div id="libreBox"' + (v.startsWith("libre:") ? "" : " hidden") + '><label class="f" for="mLibre">Nom du plat</label><input class="t" id="mLibre" value="' + esc(v.startsWith("libre:") ? v.slice(6) : "") + '" placeholder="ex. Raclette"></div>' +
+    '<label class="f" for="mNote">Remarque</label><textarea class="t" id="mNote" placeholder="ex. préparer la veille, Lana mange à l’école…">' + esc(menu.notes[slot] || "") + '</textarea>' +
+    '<label class="chk"><input type="checkbox" id="mIng"> Ajouter les ingrédients du nouveau plat à la liste</label>' +
+    '<div class="actions"><button class="btn primary">Enregistrer</button></div></form>');
+}
+sheet.addEventListener("change", e => { if (e.target.id === "mPick") $("#libreBox").hidden = e.target.value !== "libre" });
+sheet.addEventListener("submit", e => {
+  if (e.target.id !== "mealForm") return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const slot = e.target.dataset.slot, pick = $("#mPick").value, note = $("#mNote").value.trim();
+  let v = menu.choix[slot] || "";
+  if (pick === "libre") { const t = $("#mLibre").value.trim(); if (!t) { $("#mLibre").focus(); return } v = "libre:" + t }
+  else if (pick) v = pick;
+  const changed = v !== (menu.choix[slot] || "");
+  menu.choix[slot] = v; menu.notes[slot] = note; (menu.par = menu.par || {})[slot] = me;
+  setDoc(menuRef(), { choix: { [slot]: v }, notes: { [slot]: note }, par: { [slot]: me }, maj: Date.now() }, { merge: true }).catch(fail);
+  if ($("#mIng").checked && window.R[v]) addIngredients(v, slot);
+  closeSheet(); toast(changed ? "Menu modifié" : "Remarque enregistrée");
+}, true);
+function addIngredients(rid, slot) {
+  const r = window.R[rid], day = slot.slice(0, 10);
+  const course = day >= TRIP_DATE.b ? "c" : "b";
+  const list = [];
+  r.ing.filter(i => i[3] !== "placard").forEach((i, n) => {
+    const id = "i" + Date.now().toString(36) + n;
+    const q = ((i[0] === 0.5 ? "½" : String(i[0]).replace(".", ",")) + " " + (i[1] || "")).trim();
+    const data = { n: i[2].charAt(0).toUpperCase() + i[2].slice(1), q, p: "", prix: null, c: course, r: i[3], note: "Pour " + r.nom.toLowerCase() + " (" + day.slice(8) + "." + Number(day.slice(5, 7)) + ")", frz: false, act: false, coche: false, par: me, liste: LISTE, o: 500 + n, maj: Date.now() };
+    items[id] = data; write(id, data); list.push({ id, before: null });
+  });
+  pushUndo("ajout des ingrédients de « " + r.nom + " »", list);
+  setTimeout(() => toast(list.length + " ingrédients ajoutés à « " + TRIPS[course] + " »", true), 2300);
+}
+
 /* ---------- Toast ---------- */
 function toast(t, withUndo) {
   $("#toastText").textContent = t; $("#toastUndo").hidden = !withUndo; $("#toast").hidden = false;
@@ -439,8 +553,10 @@ document.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   const ds = t.dataset;
   if (ds.tab) { tab = ds.tab; ls.set("tab", tab); render(); window.scrollTo(0, 0); return }
-  if (ds.trip) { trip = ds.trip; ls.set("trip", trip); render(); return }
-  if (ds.filter) { filter = ds.filter; if (filter === other()) newsDismissed = true; render(); return }
+  if (ds.trip) { trip = ds.trip; ls.set("trip", trip); tab = "courses"; render(); return }
+  if (ds.filter) { filter = ds.filter; tab = "courses"; render(); return }
+  if (ds.dismiss) { const d = dismissed(); d.push(ds.dismiss); ls.set(dismissKey(), JSON.stringify(d)); render(); return }
+  if (ds.meal) { mealSheet(ds.meal); return }
   if (ds.check) {
     const id = ds.check, x = items[id]; if (!x) return;
     const now = !x.coche;
@@ -483,7 +599,20 @@ async function start() {
 
 if (code && me) connect();
 render();
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+/* ---------- Mises à jour de l'appli ---------- */
+if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}) });
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || $(".update")) return;
+    const b = document.createElement("button");
+    b.className = "update"; b.textContent = "Nouvelle version de l’appli — toucher pour mettre à jour";
+    b.addEventListener("click", () => location.reload());
+    document.body.appendChild(b);
+  });
+}
 </script>
 </body>
 </html>
