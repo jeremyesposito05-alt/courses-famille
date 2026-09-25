@@ -1,10 +1,10 @@
 // Service worker : l'appli s'ouvre même sans réseau (au fond du magasin).
 // Les données de la liste passent par Firebase, qui a son propre cache hors ligne.
-const VERSION = 'courses-v10';
+const VERSION = 'courses-v11';
 const SHELL = ['./', 'index.html', 'app.js', 'budget.js', 'recettes.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))));   // toujours la version fraîche du serveur
   self.skipWaiting();
 });
 
@@ -22,7 +22,7 @@ self.addEventListener('fetch', e => {
 
   e.respondWith(caches.open(VERSION).then(async cache => {
     const cached = await cache.match(e.request, { ignoreSearch: own });
-    const network = fetch(e.request).then(res => {
+    const network = fetch(e.request, own ? { cache: 'no-cache' } : {}).then(res => {
       if (res.ok || res.type === 'opaque') cache.put(e.request, res.clone());
       return res;
     });
