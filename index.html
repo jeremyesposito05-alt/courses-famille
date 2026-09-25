@@ -178,6 +178,12 @@ ul.hist small{color:var(--muted)}
 .sim-tab td:first-child{white-space:normal;min-width:110px}
 input.sim{width:88px;display:inline-block;margin:0;padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums}
 #simEffect{line-height:1.8}
+/* une couleur par catégorie du budget (assez foncée pour rester lisible en texte) */
+:root{--c1:#1565C0;--c2:#00897B;--c3:#E65100;--c4:#2E7D32;--c5:#D81B60;--c6:#B8860B;--c7:#6A1B9A;--c8:#827717;
+  --c9:#C62828;--c10:#3949AB;--c11:#6D4C41;--c12:#0277BD;--c13:#AD1457;--c14:#00695C;--c15:#4527A0;--c16:#616161}
+@media (prefers-color-scheme:dark){:root{--c1:#64A8F0;--c2:#4DD0C4;--c3:#FF8A50;--c4:#72C27A;--c5:#F0628F;--c6:#E6B84A;--c7:#B97BE0;--c8:#C0CA33;
+  --c9:#EF6B6B;--c10:#8C9EFF;--c11:#BC8F7E;--c12:#4FC3F7;--c13:#E57BA6;--c14:#4DB6AC;--c15:#9C8CF0;--c16:#A8A8A8}}
+
 /* projets */
 .proj{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px;box-shadow:inset 4px 0 0 var(--rc)}
 .proj-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}

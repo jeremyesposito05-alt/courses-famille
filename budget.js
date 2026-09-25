@@ -23,7 +23,7 @@ const SLOT = { "Logement": 1, "Impôts": 2, "Enfants": 3, "Santé": 4, "Énergie
 const FREQ = { mois: "Mensuelle", an: "Annuelle (lissée par mois)", ponctuel: "Ponctuelle (ce mois-là)" };
 const MOIS_L = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 const VIEWS = [["resume", "Résumé"], ["factures", "Factures"], ["paiements", "Paiements"], ["graph", "Graphiques"], ["avenir", "Avenir"]];
-const colorOf = c => SLOT[c] ? "var(--s" + SLOT[c] + ")" : "var(--s-other)";
+const colorOf = c => { const i = CAT_ORDER.indexOf(c); return "var(--c" + (i < 0 ? CAT_ORDER.length : i + 1) + ")" };   // une couleur par catégorie
 
 export function budgetModule(ctx) {
   const { fs, code, esc, toast, openSheet, closeSheet, rerender, isOpen, me } = ctx;
@@ -47,7 +47,7 @@ export function budgetModule(ctx) {
   /* ---- Projets personnels : combien mettre de côté par mois pour financer un achat ---- */
   let projets = {};
   const PCATS = ["Loisirs", "Maison", "Famille", "Voiture", "Vacances", "Enfants", "Santé", "Autre"];
-  const PCOL = { "Loisirs": "var(--s6)", "Maison": "var(--s1)", "Famille": "var(--s5)", "Voiture": "var(--s2)", "Vacances": "var(--s3)", "Enfants": "var(--s7)", "Santé": "var(--s4)", "Autre": "var(--s-other)" };
+  const PCOL = { "Loisirs": "var(--c7)", "Maison": "var(--c10)", "Famille": "var(--c13)", "Voiture": "var(--c11)", "Vacances": "var(--c12)", "Enfants": "var(--c4)", "Santé": "var(--c5)", "Autre": "var(--c16)" };
   const POUR = { Papa: "Papa", Maman: "Maman", commune: "Commun (prorata)", egal: "Commun (50/50)" };
   const DUREES = [3, 4, 6, 10, 12];
   const pref = id => doc(fs, "familles", code(), "projets", id);
