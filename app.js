@@ -3,6 +3,7 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
          collection, doc, query, where, onSnapshot, setDoc, updateDoc, deleteDoc, deleteField, writeBatch,
          getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { budgetModule } from "./budget.js";
+import { agendaModule } from "./agenda.js";
 
 /* ---------- Firebase (configuration publique ; la liste est protégée par le code famille) ---------- */
 const fbApp = initializeApp({
@@ -124,6 +125,7 @@ function undo() {
 function connect() {
   unsubs.forEach(u => u()); unsubs = [];
   budget.connect();
+  agenda.connect();
   unsubs.push(onSnapshot(fam("config", "app"), snap => {
     const p = (snap.exists() && snap.data().periode) || "2026-09-25";
     if (p !== pid) { pid = p; connectPeriod() }
@@ -197,7 +199,7 @@ function render() {
   $("#app").innerHTML = '<header class="top" id="top"></header><main id="main"></main>' +
     ((tab === "courses" && trip) || tab === "budget" ? '<button class="fab" id="add" aria-label="Ajouter un article">+</button>' : "") +
     '<nav class="tabs" role="tablist">' +
-    tabBtn("accueil", "Accueil", '<path d="M3 11 12 4l9 7M5 10v10h14V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
+    tabBtn("accueil", "Aujourd’hui", '<path d="M3 11 12 4l9 7M5 10v10h14V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
     tabBtn("courses", "Courses", '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
     tabBtn("menus", "Menus", '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
     tabBtn("budget", "Budget", '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
@@ -252,7 +254,7 @@ function renderHome() {
   const menuSub = todays.length ? todays.map(s => esc(s.repas) + " : " + esc(title(s))).join("<br>") : upcoming ? esc(fmtD(upcoming.id.slice(0, 10))) + " · " + esc(title(upcoming)) : "Aucun repas prévu";
   // Budget : ce que chacun verse ce mois
   const bs = budget.summary();
-  let h = '<section class="hello"><p class="eyebrow">' + JOURS_LONG[d.getDay()] + " " + d.getDate() + " " + MOIS[d.getMonth()] + '</p><h2>Bonjour ' + esc(me) + '</h2></section>' + alertsHtml() +
+  let h = agenda.html() + alertsHtml() +
     '<div class="tiles">' +
     tile("courses", "Courses", next ? esc(next.nom) + " · " + esc(fmtD(next.date)) : "Aucune course prévue", next ? left + " article" + (left > 1 ? "s" : "") + " à acheter" : "", "var(--t-courses)",
       '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
@@ -364,6 +366,8 @@ function renderSetup() {
 /* ---------- Feuilles ---------- */
 const dlg = $("#dlg"), sheet = $("#sheet");
 const budget = budgetModule({ fs, code: () => code, me: () => me, tab: () => tab, esc, ls, sheet, toast: (t, u) => toast(t, u), openSheet: h => openSheet(h), closeSheet: () => closeSheet(), rerender: () => render(), isOpen: () => dlg.open });
+const agenda = agendaModule({ fs, code: () => code, me: () => me, tab: () => tab, esc, sheet, toast: (t, u) => toast(t, u), openSheet: h => openSheet(h), closeSheet: () => closeSheet(), rerender: () => render(), isOpen: () => dlg.open,
+  iso, dt, addDays, mondayOf, today, weekSlots, slotTitle, slotData });
 function openSheet(html) { sheet.innerHTML = html; try { dlg.showModal() } catch (e) { dlg.setAttribute("open", "") } }
 function closeSheet() { try { dlg.close() } catch (e) { dlg.removeAttribute("open") } render() }
 dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest(".x")) closeSheet() });
@@ -600,6 +604,7 @@ function dessert(k) {
 sheet.addEventListener("submit", e => {
   e.preventDefault();
   if (budget.submitAny(e.target)) return;
+  if (agenda.submitAny(e.target)) return;
   const f = e.target.dataset.form;
   if (f === "item") submitItem(e.target); else if (f === "meal") submitMeal(e.target); else if (f === "liste") submitList();
 });
@@ -607,6 +612,7 @@ sheet.addEventListener("change", e => { if (e.target.id === "mPick") $("#libreBo
 sheet.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   if (budget.sheetClick(t)) return;
+  if (agenda.sheetClick(t)) return;
   if (t.id === "del") {
     if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = "Confirmer"; return }
     const id = t.closest("form").dataset.id, before = Object.assign({}, items[id]);
@@ -649,6 +655,7 @@ $("#toastUndo").addEventListener("click", () => { $("#toast").hidden = true; und
 document.addEventListener("click", e => {
   const t = e.target.closest("button") || e.target.closest("tr[data-fact]"); if (!t || t.closest("#sheet") && !t.dataset.recipe) return;
   const ds = t.dataset;
+  if (tab === "accueil" && agenda.click(t)) return;
   if (tab === "budget" && t.id === "add") return budget.add();
   if (tab === "budget" && budget.click(t)) return;
   if (ds.tab) { tab = ds.tab; ls.set("tab", tab); render(); window.scrollTo(0, 0); return }

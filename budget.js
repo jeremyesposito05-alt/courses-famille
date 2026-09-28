@@ -106,6 +106,44 @@ export function budgetModule(ctx) {
     projets[id] = Object.assign({}, p, { facture: fid, debut }); updateDoc(pref(id), { facture: fid, debut }).catch(fail);
     if (!silent) { rerender(); toast("Programmé : " + chf(f.montant) + " CHF par mois pendant " + n + " mois") }
   }
+  /* ---- Calculatrice de crédit (simulation : le taux réel est celui proposé par la banque) ---- */
+  const cred = { nom: "", montant: 20000, apport: 0, taux: 4.5, mois: 48, cat: "Voiture", pour: "commune" };
+  const mensualite = (capital, taux, n) => { const i = taux / 100 / 12; return capital <= 0 || n <= 0 ? 0 : i ? capital * i / (1 - Math.pow(1 + i, -n)) : capital / n };
+  function creditHtml() {
+    const inp = (k, lbl, attrs) => '<div><label class="f" for="cr-' + k + '">' + lbl + '</label><input class="t" id="cr-' + k + '" data-cred="' + k + '" ' + attrs + ' value="' + esc(cred[k]) + '"></div>';
+    return '<section class="card"><h2>Calculatrice de crédit</h2>' +
+      '<p class="note">Voiture, travaux, gros achat : simulez la mensualité et le coût réel d’un crédit ou d’un leasing.</p>' +
+      '<div class="two">' + inp("montant", "Montant (CHF)", 'type="number" step="100" min="0" inputmode="decimal"') + inp("apport", "Apport (CHF)", 'type="number" step="100" min="0" inputmode="decimal"') + '</div>' +
+      '<div class="two">' + inp("taux", "Taux annuel (%)", 'type="number" step="0.1" min="0" max="30" inputmode="decimal"') + inp("mois", "Durée (mois)", 'type="number" step="1" min="1" max="360" inputmode="numeric"') + '</div>' +
+      '<div class="cr-res num"><div><span>Mensualité</span><b id="crM"></b></div><div><span>Intérêts payés</span><b id="crI"></b></div><div><span>Total remboursé</span><b id="crT"></b></div></div>' +
+      '<p class="note" id="crSplit"></p>' +
+      '<div class="scroll-x"><table class="f-tab num sim-tab"><thead><tr><th>Durée</th><th>Mensualité</th><th>Intérêts</th></tr></thead><tbody id="crCmp"></tbody></table></div>' +
+      '<details class="cr-add"><summary>Ajouter ce crédit au budget</summary>' +
+      '<div class="two"><div><label class="f" for="cr-nom">Libellé</label><input class="t" id="cr-nom" data-cred="nom" value="' + esc(cred.nom) + '" placeholder="ex. Leasing voiture"></div>' +
+      '<div><label class="f" for="cr-pour">Pour</label><select class="t" id="cr-pour" data-cred="pour">' + Object.entries(POUR).map(([k, t]) => '<option value="' + k + '"' + (k === cred.pour ? " selected" : "") + '>' + t + '</option>').join("") + '</select></div></div>' +
+      '<label class="f" for="cr-cat">Catégorie</label><select class="t" id="cr-cat" data-cred="cat">' + CAT_ORDER.map(c => '<option' + (c === cred.cat ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
+      '<button class="btn primary wide" data-b="credadd">Ajouter la mensualité au budget</button></details>' +
+      '<p class="note">Simulation indicative : le taux, les frais et l’assurance réels sont ceux de l’offre de la banque ou du concessionnaire.</p></section>';
+  }
+  function creditUpdate() {
+    const el = id => document.getElementById(id); if (!el("crM")) return;
+    const cap = Math.max(0, (Number(cred.montant) || 0) - (Number(cred.apport) || 0)), n = Math.max(1, Math.round(Number(cred.mois) || 1)), t = Math.max(0, Number(cred.taux) || 0);
+    const m = mensualite(cap, t, n), rt = ratio();
+    el("crM").textContent = chf(m) + " CHF"; el("crI").textContent = chf(m * n - cap) + " CHF"; el("crT").textContent = chf(m * n) + " CHF";
+    el("crSplit").textContent = cred.pour === "commune" ? "Au prorata : Papa " + chf(m * rt.Papa) + " · Maman " + chf(m * rt.Maman) + " par mois" : cred.pour === "egal" ? chf(m / 2) + " chacun par mois" : "";
+    el("crCmp").innerHTML = [24, 36, 48, 60, 72, 84].map(k => { const mk = mensualite(cap, t, k); return '<tr' + (k === n ? ' class="on"' : "") + '><td>' + k + ' mois</td><td>' + chf(mk) + '</td><td>' + chf(mk * k - cap) + '</td></tr>' }).join("");
+  }
+  document.addEventListener("input", e => { const k = e.target.dataset && e.target.dataset.cred; if (!k) return; cred[k] = ["nom", "pour", "cat"].includes(k) ? e.target.value : Number(String(e.target.value).replace(",", ".")); creditUpdate() });
+  document.addEventListener("change", e => { const k = e.target.dataset && e.target.dataset.cred; if (k === "pour" || k === "cat") { cred[k] = e.target.value; creditUpdate() } });
+  function creditToBudget() {
+    const cap = Math.max(0, cred.montant - cred.apport), n = Math.max(1, Math.round(cred.mois)), m = Math.round(mensualite(cap, cred.taux, n) * 100) / 100;
+    if (!m) { toast("Indiquez un montant"); return }
+    const ref = doc(collection(fs, "familles", code(), "factures"));
+    const f = { nom: cred.nom || "Crédit", montant: m, freq: "mois", cat: cred.cat, sous: "", type: cred.pour, payePar: cred.pour === "Papa" || cred.pour === "Maman" ? cred.pour : "",
+      note: "Crédit de " + chf(cap) + " CHF à " + cred.taux + " % sur " + n + " mois", debut: ym, fin: addMonths(ym, n - 1), maj: Date.now(), par: me() };
+    factures[ref.id] = f; setDoc(ref, f).catch(fail); toast("Ajouté au budget : " + chf(m) + " CHF par mois pendant " + n + " mois");
+  }
+
   function unplanProjet(id) {
     const p = projets[id]; if (!p || !p.facture) return;
     deleteDoc(fref(p.facture)).catch(fail); delete factures[p.facture];
@@ -174,7 +212,7 @@ export function budgetModule(ctx) {
     if (!loaded || !config) { main.innerHTML = '<p class="empty">Chargement du budget…</p>'; return }
     const m = month();
     main.innerHTML = view === "factures" ? viewFactures(m) : view === "paiements" ? viewPaiements(m) : view === "graph" ? viewGraph(m) : view === "avenir" ? viewAvenir(m) : viewResume(m);
-    if (view === "avenir") simUpdate();
+    if (view === "avenir") { simUpdate(); creditUpdate() }
   }
 
   function viewResume(m) {
@@ -186,7 +224,9 @@ export function budgetModule(ctx) {
       '<tr><td>Part des communes</td><td>' + chf(m.com.Papa) + '</td><td>' + chf(m.com.Maman) + '</td></tr>' +
       '<tr><td>Individuelles</td><td>' + chf(m.ind.Papa) + '</td><td>' + chf(m.ind.Maman) + '</td></tr>' +
       '<tr><td>Total à charge</td><td>' + chf(m.com.Papa + m.ind.Papa) + '</td><td>' + chf(m.com.Maman + m.ind.Maman) + '</td></tr>' +
-      '<tr class="tot"><td>Reste</td><td>' + hide(m.reste.Papa) + '</td><td>' + hide(m.reste.Maman) + '</td></tr></tbody></table>' +
+      '<tr class="sub"><td>Reste après les factures du mois</td><td>' + hide(m.reste.Papa + m.cpt.an.Papa) + '</td><td>' + hide(m.reste.Maman + m.cpt.an.Maman) + '</td></tr>' +
+      '<tr><td>− Réserve pour les factures annuelles</td><td>' + chf(m.cpt.an.Papa) + '</td><td>' + chf(m.cpt.an.Maman) + '</td></tr>' +
+      '<tr class="tot"><td>Reste après tout</td><td>' + hide(m.reste.Papa) + '</td><td>' + hide(m.reste.Maman) + '</td></tr></tbody></table>' +
       (showSal ? '<button class="btn wide" data-b="sal">Modifier les salaires</button>' : "") + '</section>' + versementsCard(m) +
       '<div class="b-go">' + VIEWS.slice(1).map(([k, t]) => '<button class="btn" data-bv="' + k + '">' + t + ' ›</button>').join("") + '</div>';
   }
@@ -257,7 +297,7 @@ export function budgetModule(ctx) {
       '<button class="btn wide" data-b="3amax">Régler les deux au plafond (' + chf(PLAFOND_3A / 12) + ' / mois)</button></section>' +
       '<section class="card"><h2>Effet sur le budget</h2><p id="simEffect" class="num"></p>' +
       '<div class="actions"><button class="btn" data-b="simreset">Revenir aux montants actuels</button><button class="btn primary" data-b="simapply">Appliquer au budget</button></div></section>' +
-      projetsHtml();
+      projetsHtml() + creditHtml();
   }
   function simUpdate() {
     const lines = simLines(), rt = ratio(); if (!document.getElementById("simEffect")) return;
@@ -393,6 +433,7 @@ export function budgetModule(ctx) {
     if (d.b === "propose") { proposeSheet(); return true }
     if (d.b === "simapply") { simApply(t); return true }
     if (d.b === "projadd") { projetSheet(null); return true }
+    if (d.b === "credadd") { creditToBudget(); return true }
     if (d.pedit) { projetSheet(d.pedit); return true }
     if (d.pplan) { planProjet(d.pplan); return true }
     if (d.punplan) { unplanProjet(d.punplan); return true }
