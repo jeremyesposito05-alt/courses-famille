@@ -12,7 +12,16 @@ export const ACATS = [
   ["important", "Important", "⭐"]
 ];
 const PERS = ["Papa", "Maman", "Lana", "Logan"];
-const REP = { une: "Une seule fois", sem: "Chaque semaine", deux: "Toutes les 2 semaines", an: "Chaque année" };
+const REP = { une: "Une seule fois", sem: "Chaque semaine", deux: "Toutes les 2 semaines", an: "Chaque année", per: "Tous les jours (période)" };
+// Suggestions rapides, selon le thème choisi
+const SUGG = {
+  prep: ["⚽ Affaires de foot", "🎾 Affaires de tennis", "🏊 Affaires de piscine", "👟 Tenue de sport", "⛸️ Affaires de patin", "📚 Livre à rendre", "🎒 Préparer son sac"],
+  transport: ["🚶 À pied à l’école", "🚌 Bus", "🚗 Voiture avec Papa", "🚗 Voiture avec Maman"],
+  ecole: ["✏️ Devoirs", "📖 Lire 20 minutes", "🇬🇧 Réviser l’anglais", "🇩🇪 Réviser l’allemand", "🧮 Réviser les maths", "📝 Contrôle"],
+  sport: ["⚽ Foot", "🎾 Tennis", "⛸️ Patin", "🏊 Piscine", "⛷️ Ski"],
+  famille: ["🧹 Ranger sa chambre", "🍽️ Mettre la table", "🧺 Linge", "🎂 Anniversaire", "👵 Visite des grands-parents", "🎬 Soirée ciné"],
+  important: ["🎂 Anniversaire", "🩺 Rendez-vous médecin", "🦷 Dentiste", "🎉 Fête", "✈️ Départ en vacances"]
+};
 const JL = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const JC = ["D", "L", "M", "M", "J", "V", "S"];
 const ML = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -39,10 +48,13 @@ export function agendaModule(ctx) {
     if (e.rep === "sem") return diff(e.date, d) % 7 === 0;
     if (e.rep === "deux") return diff(e.date, d) % 14 === 0;
     if (e.rep === "an") return e.date.slice(5) === d.slice(5);
+    if (e.rep === "per") return !!e.fin;              // chaque jour entre date et fin
     return e.date === d;
   }
-  const itemsOf = (d, cat) => Object.entries(evts).filter(([, e]) => e.cat === cat && occurs(e, d))
-    .sort((a, b) => (a[1].heure || "99").localeCompare(b[1].heure || "99") || a[1].texte.localeCompare(b[1].texte, "fr"));
+  // Vacances scolaires et jours fériés : les activités « en pause pendant les vacances » disparaissent ces jours-là
+  const vacOf = d => Object.values(evts).find(e => e.vac && occurs(e, d));
+  const itemsOf = (d, cat) => { const v = vacOf(d); return Object.entries(evts).filter(([, e]) => e.cat === cat && occurs(e, d) && !(v && e.pauseVac && !e.vac))
+    .sort((a, b) => (a[1].vac ? -1 : b[1].vac ? 1 : 0) || (a[1].heure || "99").localeCompare(b[1].heure || "99") || a[1].texte.localeCompare(b[1].texte, "fr")) };
 
   /* ---- Rendu ---- */
   const wide = () => innerWidth >= 700 && innerWidth > innerHeight;
@@ -50,8 +62,8 @@ export function agendaModule(ctx) {
   const fmtLong = d => JL[dt(d).getDay()] + " " + dt(d).getDate() + " " + ML[dt(d).getMonth()];
 
   function itemHtml(id, e, d) {
-    return '<button class="ag-it" data-agedit="' + id + '" data-agday="' + d + '">' + (e.heure ? '<span class="ag-h num">' + esc(e.heure) + '</span>' : "") +
-      '<span class="ag-tx">' + esc(e.texte) + (e.rep && e.rep !== "une" ? ' <span class="ag-rep" title="' + esc(REP[e.rep]) + '">↻</span>' : "") + '</span>' +
+    return '<button class="ag-it' + (e.vac ? " ag-vac" : "") + '" data-agedit="' + id + '" data-agday="' + d + '">' + (e.heure ? '<span class="ag-h num">' + esc(e.heure) + '</span>' : "") +
+      '<span class="ag-tx">' + esc(e.texte) + (e.rep && e.rep !== "une" && !e.vac ? ' <span class="ag-rep" title="' + esc(REP[e.rep]) + '">↻</span>' : "") + '</span>' +
       (e.qui && e.qui.length ? '<span class="ag-qui">' + e.qui.map(p => '<i class="p-' + p + '" title="' + p + '">' + p[0] + (p === "Logan" ? "o" : p === "Lana" ? "a" : "") + '</i>').join("") + '</span>' : "") + '</button>';
   }
   function repasHtml(d) {
@@ -81,6 +93,7 @@ export function agendaModule(ctx) {
     strip += '</div>';
     let h = '<section class="ag" aria-label="Emploi du temps">' +
       '<div class="ag-nav"><button class="x" data-agmove="-' + (n === 7 ? 7 : 1) + '" aria-label="Précédent">‹</button><div><b>' + (day === t0 ? "Aujourd’hui · " : "") + fmtLong(day) + '</b>' +
+      (vacOf(day) ? '<span class="ag-vacb">' + esc(vacOf(day).texte) + '</span>' : "") +
       (day !== t0 ? '<button class="lnk" data-agjump="' + t0 + '">revenir à aujourd’hui</button>' : '<span class="note">Glissez pour changer de jour</span>') + '</div>' +
       '<button class="x" data-agmove="' + (n === 7 ? 7 : 1) + '" aria-label="Suivant">›</button></div>' + (n === 1 ? strip : "");
     if (n === 1) h += '<div class="ag-day ag-swipe">' + dayCol(day) + '</div>';
@@ -96,24 +109,29 @@ export function agendaModule(ctx) {
 
   /* ---- Fiche d'ajout / de modification ---- */
   function sheet(id, cat, d) {
-    const e = id ? evts[id] : { cat, texte: "", date: d, heure: "", qui: [], rep: "une", fin: "" };
+    const e = id ? evts[id] : { cat, texte: "", date: d, heure: "", qui: [], rep: "une", fin: "", pauseVac: !["famille", "important"].includes(cat) };
+    const chips = c => (SUGG[c] || []).map(s => '<button type="button" class="ag-sug" data-agsug="' + esc(s) + '">' + esc(s) + '</button>').join("");
     openSheet('<form data-form="agenda" data-id="' + (id || "") + '" data-day="' + d + '"><div class="sheet-head"><h2>' + (id ? "Modifier" : "Ajouter") + '</h2><button type="button" class="x" aria-label="Fermer">×</button></div>' +
+      (id ? "" : '<div class="ag-sugs" id="agSugs">' + chips(e.cat) + '</div>') +
       '<label class="f" for="agT">Quoi</label><input class="t" id="agT" required value="' + esc(e.texte) + '" placeholder="' + (e.cat === "prep" ? "ex. sac de tennis, livre de bibliothèque" : e.cat === "transport" ? "ex. déposer Logan au tennis" : "ex. anniversaire de Mamie") + '">' +
       '<div class="two"><div><label class="f" for="agC">Thème</label><select class="t" id="agC">' + ACATS.filter(([k]) => k !== "repas").map(([k, l]) => '<option value="' + k + '"' + (k === e.cat ? " selected" : "") + '>' + l + '</option>').join("") + '</select></div>' +
       '<div><label class="f" for="agH">Heure (facultatif)</label><input class="t" id="agH" type="time" value="' + esc(e.heure || "") + '"></div></div>' +
       '<label class="f">Pour qui</label><div class="ag-pick">' + PERS.map(p => '<label class="p-' + p + '"><input type="checkbox" value="' + p + '"' + ((e.qui || []).includes(p) ? " checked" : "") + '> ' + p + '</label>').join("") + '</div>' +
       '<div class="two"><div><label class="f" for="agD">' + (id && e.rep !== "une" ? "À partir du" : "Date") + '</label><input class="t" id="agD" type="date" value="' + esc(e.date) + '"></div>' +
       '<div><label class="f" for="agR">Répéter</label><select class="t" id="agR">' + Object.entries(REP).map(([k, l]) => '<option value="' + k + '"' + (k === (e.rep || "une") ? " selected" : "") + '>' + l + '</option>').join("") + '</select></div></div>' +
-      '<div id="agFinBox"' + ((e.rep || "une") === "une" ? " hidden" : "") + '><label class="f" for="agF">Jusqu’au (facultatif)</label><input class="t" id="agF" type="date" value="' + esc(e.fin || "") + '"></div>' +
+      '<div id="agFinBox"' + ((e.rep || "une") === "une" ? " hidden" : "") + '><label class="f" for="agF">Jusqu’au</label><input class="t" id="agF" type="date" value="' + esc(e.fin || "") + '"></div>' +
+      '<label class="chk"><input type="checkbox" id="agV"' + (e.pauseVac ? " checked" : "") + '> Pause pendant les vacances scolaires et jours fériés</label>' +
       '<div class="actions">' + (id ? '<button type="button" class="btn danger" data-agdel="' + id + '">Supprimer</button>' : "") + '<button class="btn primary">' + (id ? "Enregistrer" : "Ajouter") + '</button></div>' +
       (id && e.rep && e.rep !== "une" ? '<button type="button" class="btn wide" data-agskip="' + id + '">Retirer seulement le ' + fmtLong(d).toLowerCase() + '</button>' : "") + '</form>');
     ctx.sheet.querySelector("#agR").addEventListener("change", ev => { ctx.sheet.querySelector("#agFinBox").hidden = ev.target.value === "une" });
+    ctx.sheet.querySelector("#agC").addEventListener("change", ev => { const s = ctx.sheet.querySelector("#agSugs"); if (s) s.innerHTML = chips(ev.target.value) });
   }
   function submit(form) {
     const q = s => ctx.sheet.querySelector(s), id = form.dataset.id;
     const texte = q("#agT").value.trim(); if (!texte) return;
     const data = { texte, cat: q("#agC").value, heure: q("#agH").value || "", qui: [...ctx.sheet.querySelectorAll(".ag-pick input:checked")].map(i => i.value),
-      date: q("#agD").value || day, rep: q("#agR").value, fin: q("#agR").value === "une" ? "" : (q("#agF").value || ""), maj: Date.now(), modifPar: me() };
+      date: q("#agD").value || day, rep: q("#agR").value, fin: q("#agR").value === "une" ? "" : (q("#agF").value || ""), pauseVac: q("#agV").checked, maj: Date.now(), modifPar: me() };
+    if (data.rep === "per" && !data.fin) { q("#agF").focus(); toast("Indiquez la date de fin de la période"); return }
     const ref = id ? aref(id) : doc(collection(fs, "familles", code(), "agenda"));
     if (!id) Object.assign(data, { par: me(), sauf: [] });
     evts[ref.id] = Object.assign({}, evts[ref.id] || {}, data);
@@ -133,6 +151,7 @@ export function agendaModule(ctx) {
   }
   function sheetClick(t) {
     const d = t.dataset;
+    if (d.agsug) { const inp = ctx.sheet.querySelector("#agT"); inp.value = d.agsug; inp.focus(); return true }
     if (d.agdel) {
       if (!t.dataset.sure) { t.dataset.sure = "1"; t.textContent = evts[d.agdel] && evts[d.agdel].rep !== "une" ? "Confirmer (toutes les fois)" : "Confirmer"; return true }
       deleteDoc(aref(d.agdel)).catch(fail); delete evts[d.agdel]; closeSheet(); toast("Supprimé"); return true;
