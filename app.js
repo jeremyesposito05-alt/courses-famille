@@ -92,7 +92,9 @@ let wk = mondayOf(today());
 const weekSlots = mon => {
   const w = weeks[mon] || {}, out = [];
   for (let i = 0; i < 7; i++) { const day = addDays(mon, i); WEEK[dt(day).getDay()].forEach(([k, repas, c]) => { const id = day + "-" + k; out.push({ id, repas, c: (w.contraintes || {})[id] || c }) }) }
-  return out;
+  // Créneaux en plus pour une semaine particulière (ex. midis des vacances) : extra = { "2026-10-12-midi": { repas, c } }
+  Object.entries(w.extra || {}).forEach(([id, x]) => { if (!out.some(s => s.id === id)) out.push({ id, repas: x.repas || "Midi", c: (w.contraintes || {})[id] || x.c || "" }) });
+  return out.sort((a, b) => a.id.localeCompare(b.id));
 };
 const slotData = id => { const w = weeks[mondayOf(id.slice(0, 10))] || {}; return { v: (w.choix || {})[id] || "", note: (w.notes || {})[id] || "", by: (w.par || {})[id] || "" } };
 const slotTitle = id => { const s = slotData(id), r = R[s.v]; return r ? r.nom : s.v.startsWith("libre:") ? s.v.slice(6) : s.v === "aucun" ? "Pas de repas à préparer" : s.note || "À choisir" };
