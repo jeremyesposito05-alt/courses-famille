@@ -132,6 +132,10 @@ piqueNique:{nom:"Pique-nique pour la route : wraps poulet-crudités",type:"volai
  ing:[[8,"","tortillas de blé","epi"],[400,"g","blancs de poulet","viande"],[200,"g","houmous","frais"],[2,"","carottes","fl"],[1,"","concombre","fl"],[1,"","salade (feuilles)","fl"],[250,"g","tomates cerises","fl"],[4,"","œufs","frais"],[4,"","compotes en gourde","epi"],[4,"","pommes","fl"]],
  et:["La veille : poulet en lanières poêlé 6–7 min, œufs durs 9 min.","Le matin : tortillas tartinées de houmous, poulet, carotte râpée, salade ; rouler serré dans du papier alu.","Boîte à part : tomates cerises, bâtonnets de concombre, œufs durs.","Compotes et pommes pour le dessert ; tout dans la glacière."],
  lana:"Carotte râpée cachée dans le wrap, avec le houmous."},
+quicheSansPate:{nom:"Quiche sans pâte poireaux-lardons, salade et carottes râpées",type:"porc",actif:20,total:45,kcal:520,L:45,P:30,F:25,outils:"four, râpe",
+ ing:[[3,"","poireaux","fl"],[150,"g","lardons","viande"],[4,"","œufs","frais"],[2,"dl","crème sans lactose","frais"],[1.5,"dl","lait sans lactose","frais"],[30,"g","farine","epi"],[60,"g","gruyère râpé","frais"],[1,"","salade verte","fl"],[3,"","carottes","fl"]],
+ et:["Émincer finement les poireaux, les faire fondre 15 min à couvert avec les lardons.","Fouetter les œufs avec la farine, puis la crème et le lait ; poivre, muscade.","Dans un plat huilé : poireaux-lardons, appareil, gruyère.","Four 180 °C, 30 min, jusqu’à ce que ce soit pris et doré.","Salade verte et carottes râpées en vinaigrette."],
+ lana:"Poireaux très fondus dans le flan ; carottes râpées avec un filet de jus d’orange.",conseil:"Sans pâte, la quiche devient un flan léger : parfait après des gnocchi à midi."},
 restes:{nom:"Restes du mercredi soir (double portion)",type:"restes",actif:5,total:10,kcal:null,L:null,P:null,F:null,outils:"micro-ondes",ing:[],
  et:["Réchauffer la double portion préparée mercredi soir.","Ajouter crudités ou salade."],
  lana:"Selon le plat de mercredi."}
