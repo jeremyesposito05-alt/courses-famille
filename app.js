@@ -594,7 +594,7 @@ function recipe(rid) {
   const q = i => (fmtQty(i[0]) + " " + (i[1] || "")).trim() + " " + i[2];
   openSheet('<div class="sheet-head"><h2>' + esc(r.nom) + '</h2><button class="x" aria-label="Fermer">×</button></div>' +
     '<p class="note num">' + r.actif + ' min actif · ' + r.total + ' min en tout' + (r.kcal ? ' · ≈ ' + r.kcal + ' kcal / adulte' : "") + ' · ' + esc(r.outils) + '</p>' +
-    (r.ing.length ? '<h3>Ingrédients · 2 adultes + 2 enfants</h3><ul>' + r.ing.map(i => '<li>' + esc(q(i)) + '</li>').join("") + '</ul>' : "") +
+    (r.ing.length ? '<h3>Ingrédients · ' + esc(r.pers || "2 adultes + 2 enfants") + '</h3><ul>' + r.ing.map(i => '<li>' + esc(q(i)) + '</li>').join("") + '</ul>' : "") +
     '<h3>Préparation</h3><ol>' + r.et.map(s => '<li>' + esc(s) + '</li>').join("") + '</ol>' +
     '<div class="lana"><b>Pour Lana :</b> ' + esc(r.lana) + '</div>' + (r.conseil ? '<p class="note">' + esc(r.conseil) + '</p>' : ""));
 }
