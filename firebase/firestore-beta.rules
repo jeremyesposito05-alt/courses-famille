@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // BETA UNIQUEMENT. Aucune règle pour l'ancien espace /familles/{code}.
+    // Si ces règles sont testées dans un projet Firebase distinct, tout l'ancien
+    // schéma reste interdit par le refus implicite.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function memberPath(hid, uid) {
+      return /databases/$(database)/documents/households/$(hid)/members/$(uid);
+    }
+
+    function activeMember(hid) {
+      return signedIn()
+        && exists(memberPath(hid, request.auth.uid))
+        && get(memberPath(hid, request.auth.uid)).data.active == true;
+    }
+
+    function allowedTask(category) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'title', 'notes', 'category', 'priority', 'status', 'dueDate',
+          'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && d.keys().hasOnly([
+          'title', 'notes', 'category', 'priority', 'status', 'dueDate',
+          'createdBy', 'updatedBy', 'createdAt', 'updatedAt'
+        ])
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 180
+        && d.notes is string && d.notes.size() <= 1000
+        && d.category in category
+        && d.priority in ['normal', 'high']
+        && d.status in ['open', 'done']
+        && d.dueDate is string
+        && (d.dueDate == '' ||
+            d.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && d.createdBy is string && d.updatedBy is string
+        && d.createdAt is timestamp && d.updatedAt is timestamp;
+    }
+
+    function validCreate(categories) {
+      return allowedTask(categories)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validUpdate(categories) {
+      return allowedTask(categories)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Les fiches de membres ne peuvent être attribuées que par une opération
+    // administrateur de confiance (Console/Admin SDK), jamais par un client.
+    match /households/{hid}/members/{uid} {
+      allow get: if owner(uid);
+      allow list, create, update, delete: if false;
+    }
+
+    match /households/{hid}/tasks/{taskId} {
+      allow get, list: if activeMember(hid);
+      allow create: if activeMember(hid) && validCreate(['family']);
+      allow update: if activeMember(hid) && validUpdate(['family']);
+      allow delete: if activeMember(hid);
+    }
+
+    match /users/{uid}/tasks/{taskId} {
+      allow get, list: if owner(uid);
+      allow create: if owner(uid) && validCreate(['personal', 'work']);
+      allow update: if owner(uid) && validUpdate(['personal', 'work']);
+      allow delete: if owner(uid);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
