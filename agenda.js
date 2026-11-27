@@ -33,7 +33,7 @@ export function agendaModule(ctx) {
   const unsubs = [];
   const aref = id => doc(fs, "familles", code(), "agenda", id);
   const fail = () => toast("Modification non enregistrée");
-  const refresh = () => { if (ctx.tab() === "accueil" && !isOpen()) rerender() };
+  const refresh = () => { if (["accueil", "agenda"].includes(ctx.tab()) && !isOpen()) rerender() };
 
   function connect() {
     unsubs.forEach(u => u()); unsubs.length = 0;
@@ -179,5 +179,12 @@ export function agendaModule(ctx) {
   let lastWide = null;
   addEventListener("resize", () => { const w = nbCols(); if (w !== lastWide) { lastWide = w; refresh() } });
 
-  return { connect, html, click, sheetClick, submitAny: f => f.dataset.form === "agenda" ? (submit(f), true) : false };
+  function overview() {
+    const d = today();
+    const entries = ACATS.filter(([k]) => k !== "repas")
+      .flatMap(([k]) => itemsOf(d, k).map(([, e]) => e))
+      .sort((a, b) => (a.heure || "99:99").localeCompare(b.heure || "99:99"));
+    return { count: entries.length, next: entries.slice(0, 2).map(e => ({ title: e.texte, heure: e.heure || "" })) };
+  }
+  return { connect, html, overview, click, sheetClick, submitAny: f => f.dataset.form === "agenda" ? (submit(f), true) : false };
 }
