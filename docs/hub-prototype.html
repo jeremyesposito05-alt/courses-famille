@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Prototype | Famille Hub</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1b2a24;background:#f5f6f1;--green:#287453;--line:#dce6de;--muted:#607269}
+*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer}.shell{max-width:980px;margin:0 auto;padding:22px 17px 94px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:22px}
+.eyebrow{font-size:.72rem;letter-spacing:.12em;font-weight:800;color:var(--green)}h1{font-family:Georgia,serif;font-weight:normal;font-size:2rem;margin:4px 0}p{margin:0;color:var(--muted);line-height:1.4}
+.person{border:1px solid var(--line);border-radius:30px;padding:10px 14px;background:white}
+.today{background:#e5f0e8;border-radius:23px;padding:20px;box-shadow:0 8px 25px #234c3510}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}.pill{border:1px solid #b7d6c5;background:#f9fcfa;color:#175a3e;border-radius:100px;padding:8px 12px}
+section{margin-top:26px}.sectiontitle{font-size:1.12rem;margin:0 0 13px}
+.filters{display:flex;gap:8px;overflow:auto;margin:15px 0}.filters button{border:1px solid #cadad0;background:white;color:#395f4d;padding:8px 13px;border-radius:99px}
+.filters button[aria-pressed=true]{background:var(--green);color:white}
+.events{display:grid;gap:10px}.event{background:white;padding:14px;border-radius:14px;display:grid;grid-template-columns:58px 1fr;gap:12px}.time{font-weight:800;color:var(--green)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tile{border:1px solid var(--line);border-radius:19px;padding:19px;background:white;text-align:left;min-height:122px;display:flex;flex-direction:column;gap:7px;transition:transform .15s,box-shadow .15s}
+.tile:active{transform:scale(.98)}.tile:focus-visible,.filters button:focus-visible{outline:3px solid #78b395;outline-offset:2px}
+.emoji{font-size:1.65rem}.tile b{font-size:1.05rem}.tile small{color:var(--muted);line-height:1.3}
+.todo{background:white;border-radius:20px;padding:16px}.task{display:flex;align-items:flex-start;gap:10px;padding:11px 2px;border-bottom:1px solid #e7ece8}.task:last-child{border:0}.task input{width:20px;height:20px;accent-color:var(--green)}.task label{flex:1}.task.done label{text-decoration:line-through;color:#7c9185}.status{font-size:.8rem;color:var(--muted)}
+.assistant{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);width:min(94%,550px);display:flex;align-items:center;gap:8px;padding:9px;background:#1c533d;border-radius:18px;box-shadow:0 8px 30px #1b3d2955;z-index:2}
+.assistant input{flex:1;min-width:0;border:0;border-radius:12px;padding:12px;background:#fff;color:#173326}.assistant button{background:#d0e9d7;border:0;border-radius:12px;padding:12px}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:center;z-index:3}
+nav button{border:0;background:transparent;color:#52675d;padding:11px 17px;min-width:78px}nav button[aria-current=page]{color:#1f724a;font-weight:750}
+.dialog{position:fixed;inset:auto 14px 138px;border-radius:18px;background:#1b3025;color:#fff;padding:16px;max-width:500px;margin:auto;box-shadow:0 6px 40px #0003}
+.dialog p{color:#e0f1e6} .dialog button{margin-top:11px;border:0;border-radius:9px;padding:9px 14px}
+@media(min-width:720px){.grid{grid-template-columns:repeat(3,1fr)}.shell{padding-bottom:105px}.events{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){.tile{transition:none}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header><div><div class="eyebrow">FAMILLE · PROTOTYPE ISOLÉ</div><h1>Bonjour !</h1><p>Ton quotidien, au même endroit.</p></div><span class="person">👤 Papa</span></header>
+<div class="today"><div class="row"><strong>Aujourd'hui</strong><span class="pill">Vendredi 27 nov.</span></div><p style="margin-top:8px">Aperçu fictif de la nouvelle interface. Aucune donnée Firebase n'est chargée.</p>
+<div class="filters" role="group" aria-label="Filtrer les événements"><button data-filter="all" aria-pressed="true">Tout</button><button data-filter="famille" aria-pressed="false">Famille</button><button data-filter="pro" aria-pressed="false">Professionnel</button></div>
+<div class="events" id="events">
+<div class="event" data-scope="pro"><span class="time">10:20</span><div><b>Friday Briefing</b><p>CABS · Salle 3.103</p></div></div>
+<div class="event" data-scope="famille"><span class="time">18:00</span><div><b>Activité familiale</b><p>Exemple, non enregistré</p></div></div>
+</div></div>
+<section><h2 class="sectiontitle">Tout retrouver facilement</h2><div class="grid">
+<button class="tile" data-module="Agenda"><span class="emoji">🗓️</span><b>Agenda</b><small>Famille, personnel et travail</small></button>
+<button class="tile" data-module="Tâches"><span class="emoji">✅</span><b>Mes tâches</b><small>À faire, priorités, échéances</small></button>
+<button class="tile" data-module="Budget"><span class="emoji">💳</span><b>Budget</b><small>Finances et projets d'épargne</small></button>
+<button class="tile" data-module="Courses"><span class="emoji">🛒</span><b>Courses</b><small>Listes et suivi des achats</small></button>
+<button class="tile" data-module="Repas"><span class="emoji">🍽️</span><b>Repas</b><small>Menus et recettes</small></button>
+<button class="tile" data-module="Projets"><span class="emoji">📁</span><b>Projets</b><small>Maison, famille, professionnel</small></button>
+</div></section>
+<section><div class="row"><h2 class="sectiontitle">Mes priorités</h2><span class="status" id="count">0/3 terminées</span></div><div class="todo" id="tasks">
+<div class="task"><input id="t1" type="checkbox"><label for="t1">Contrôler ManageBac</label></div>
+<div class="task"><input id="t2" type="checkbox"><label for="t2">Préparer la modération G12</label></div>
+<div class="task"><input id="t3" type="checkbox"><label for="t3">Revoir l'IDU G9</label></div>
+</div></section>
+</main>
+<div class="assistant"><span aria-hidden="true">🤖</span><input id="prompt" aria-label="Assistant IA, démonstration seulement" placeholder="Demander à l'assistant IA…"><button id="send">➤</button><button id="mic" aria-label="Microphone, aperçu">🎙️</button></div>
+<nav aria-label="Navigation de démonstration"><button aria-current="page" data-module="Hub">⌂<br>Hub</button><button data-module="Agenda">▦<br>Agenda</button><button data-module="Tâches">✓<br>Tâches</button><button data-module="Assistant">✧<br>Assistant</button></nav>
+<div class="dialog" id="message" hidden role="status"><b>Prototype uniquement</b><p id="text"></p><button id="dismiss">Fermer</button></div>
+<script>
+const msg=document.getElementById('message'),txt=document.getElementById('text');
+function notice(s){txt.textContent=s+' Cette maquette ne lit ni ne modifie les données réelles.';msg.hidden=false}
+document.querySelectorAll('[data-module]').forEach(b=>b.addEventListener('click',()=>notice('Module '+b.dataset.module+' prévu dans la refonte.')));
+document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));document.querySelectorAll('.event').forEach(x=>x.hidden=b.dataset.filter!=='all'&&x.dataset.scope!==b.dataset.filter)}));
+document.querySelectorAll('.task input').forEach(x=>x.addEventListener('change',()=>{x.closest('.task').classList.toggle('done',x.checked);const count=document.querySelectorAll('.task input:checked').length;document.getElementById('count').textContent=count+'/3 terminées'}));
+document.getElementById('send').onclick=()=>notice('Assistant IA non connecté.');
+document.getElementById('mic').onclick=()=>notice('Assistant vocal non connecté.');
+document.getElementById('dismiss').onclick=()=>msg.hidden=true;
+</script>
+</body></html>
