@@ -75,7 +75,18 @@ let code = ls.get("code"), me = ls.get("me");
 const seenAtOpen = Number(ls.get("seen") || 0);
 let pid = null, per = null, items = {}, hist = {}, periods = {};
 let loaded = false, offline = false, pending = false;
-let tab = ["courses", "menus", "budget", "reglages", "taches"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil", trip = ls.get("trip") || "", filter = "tout";
+let tab = ["courses", "menus", "budget", "reglages", "taches", "agenda"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil", trip = ls.get("trip") || "", filter = "tout";
+const tabHistory = [];
+function goTab(next) {
+  const allowed = ["accueil", "taches", "agenda", "courses", "menus", "budget", "reglages"];
+  if (!allowed.includes(next) || next === tab) return;
+  tabHistory.push(tab); if (tabHistory.length > 20) tabHistory.shift();
+  tab = next; ls.set("tab", tab); render(); window.scrollTo(0, 0);
+}
+function backTab() {
+  tab = tabHistory.pop() || "accueil"; ls.set("tab", tab);
+  render(); window.scrollTo(0, 0);
+}
 let store = ls.get("store") === "1", wakeLock = null;
 let unsubs = [], unsubPer = [];
 const undoStack = [];
@@ -201,16 +212,15 @@ function render() {
   document.body.dataset.tab = tab;
   $("#app").innerHTML = '<header class="top" id="top"></header><main id="main"></main>' +
     ((tab === "courses" && trip) || tab === "budget" ? '<button class="fab" id="add" aria-label="Ajouter un article">+</button>' : "") +
-    '<nav class="tabs" role="tablist">' +
+    '<nav class="tabs" role="tablist" aria-label="Navigation principale">' +
     tabBtn("accueil", "Hub", '<path d="M3 11 12 4l9 7M5 10v10h14V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
-    tabBtn("taches", "Tâches", '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8 12 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2"/>') +
-    tabBtn("courses", "Courses", '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
-    tabBtn("menus", "Menus", '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
-    tabBtn("budget", "Budget", '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
-    tabBtn("reglages", "Réglages", '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
+    tabBtn("taches", "Priorités", '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8 12 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2"/>') +
+    tabBtn("agenda", "Agenda", '<rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 3v4M17 3v4M3 10h18" fill="none" stroke="currentColor" stroke-width="2"/>') +
+    tabBtn("courses", "Courses", '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
+    tabBtn("budget", "Budget", '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2"/>') +
     '</nav>';
   renderTop();
-  if (tab === "accueil") renderHome(); else if (tab === "taches") demoTasks.render($("#main")); else if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else if (tab === "budget") budget.render($("#main")); else renderSettings();
+  if (tab === "accueil") renderHome(); else if (tab === "taches") demoTasks.render($("#main")); else if (tab === "agenda") $("#main").innerHTML = '<section class="sk-agenda-screen"><div class="sk-eyebrow">PLANNING FAMILIAL</div><h2 class="sk-page-title">Agenda</h2><p class="sk-subtitle">Vos événements et rendez-vous.</p>' + agenda.html() + '</section>'; else if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else if (tab === "budget") budget.render($("#main")); else renderSettings();
 }
 function tabBtn(id, t, svg) {
   const n = id === "courses" && loaded ? alerts().length : 0;
@@ -220,7 +230,7 @@ function tabBtn(id, t, svg) {
 function renderTop() {
   const top = $("#top"); if (!top) return;
   const syncTxt = !loaded ? "Connexion…" : offline ? "Hors ligne" : pending ? "Envoi…" : "Synchronisé";
-  let h = '<div class="top-row"><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : tab === "taches" ? "Tâches" : "Réglages") + '</h1>' +
+  let h = '<div class="top-row"><button class="sk-back" type="button" data-back aria-label="Retour à l’écran précédent"' + (tab === "accueil" && !tabHistory.length ? " disabled" : "") + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7-7-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Retour</button><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "agenda" ? "Agenda" : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : tab === "taches" ? "Priorités" : "Réglages") + '</h1>' +
     '<span class="sync' + (offline ? " off" : "") + '"><i></i>' + syncTxt + '</span>' +
     (tab === "courses" ? '<button class="me store-btn" id="storeBtn" aria-pressed="' + store + '">' + (store ? "Quitter" : "Mode magasin") + '</button>' : '<button class="me ' + me + '" data-tab="reglages">' + me + '</button>') + '</div>';
   if (tab === "budget") h += budget.top();
@@ -242,38 +252,37 @@ function renderTop() {
   top.innerHTML = h;
 }
 
-/* ---------- Accueil : l'essentiel du jour et l'accès à tout ---------- */
+/* ---------- Hub central : résumé compact, priorités visibles ---------- */
 function renderHome() {
-  const main = $("#main"), t0 = today(), d = new Date();
-  const money = n => Number(n || 0).toLocaleString("fr-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const tile = (tabId, title, sub, key, color, svg) => '<button class="tile" data-tab="' + tabId + '" style="--tc:' + color + '"><span class="tile-ic" aria-hidden="true"><svg viewBox="0 0 24 24">' + svg + '</svg></span>' +
-    '<span class="tile-t">' + title + '</span><span class="tile-s">' + sub + '</span>' + (key ? '<span class="tile-k">' + key + '</span>' : "") + '</button>';
-  // Courses : la prochaine course non clôturée
-  const tr = trips().filter(t => !t.clos), next = tr.find(t => (t.date || "") >= t0) || tr[0];
+  const main = $("#main"), t0 = today(), view = agenda.overview();
+  const tr = trips().filter(t => !t.clos);
+  const next = tr.find(t => (t.date || "") >= t0) || tr[0];
   const left = next ? live().filter(x => x.c === next.id && !x.coche && x.r !== "placard").length : 0;
-  // Menus : les repas du jour, sinon le prochain
-  const title = s => slotTitle(s.id);
-  const has = s => { const x = slotData(s.id); return x.v || x.note }, all = weekSlots(mondayOf(addDays(t0, -1))).concat(slots());
-  const todays = all.filter(s => s.id.startsWith(t0) && has(s)), upcoming = all.find(s => s.id.slice(0, 10) > t0 && has(s));
-  const menuSub = todays.length ? todays.map(s => esc(s.repas) + " : " + esc(title(s))).join("<br>") : upcoming ? esc(fmtD(upcoming.id.slice(0, 10))) + " · " + esc(title(upcoming)) : "Aucun repas prévu";
-  // Budget : ce que chacun verse ce mois
-  const bs = budget.summary();
-  let h = agenda.html() + alertsHtml() +
+  const menuSlots = slots().filter(s => s.id.startsWith(t0) && (slotData(s.id).v || slotData(s.id).note));
+  const mealInfo = menuSlots.length ? "Repas du jour prévu" : "Menus et recettes";
+  const card = (id, css, icon, title, sub) =>
+    '<button type="button" class="sk-tile sk-card ' + css + '" data-tab="' + id + '">' +
+    '<span class="sk-tile-icon" aria-hidden="true">' + icon + '</span><strong>' + title + '</strong><small>' + sub + '</small></button>';
+  main.innerHTML =
+    '<section class="sk-home">' +
+    '<span class="sk-eyebrow">ESPACE FAMILLE</span><h2 class="sk-page-title">Bonjour ! ☀</h2>' +
+    '<p class="sk-subtitle">Tout ton quotidien, au même endroit.</p>' +
+    '<div class="sk-today sk-card"><span class="sk-eyebrow">AUJOURD’HUI · ' + esc(fmtD(t0)) + '</span>' +
+    '<div class="sk-today-stats"><strong>' + view.count + '</strong><span>événement' + (view.count === 1 ? '' : 's') + '</span><i></i>' +
+    '<strong>' + demoTasks.count() + '</strong><span>priorité' + (demoTasks.count() === 1 ? '' : 's') + '</span></div></div>' +
     demoTasks.summary() +
-    '<div class="hub-section-head"><span class="hub-kicker">ACCÈS RAPIDE</span><h2>Mes espaces</h2></div>' +
-    '<div class="hub-hero"><span class="hub-kicker">FAMILLE · NOUVEAU HUB</span><h2>Bienvenue dans ton espace</h2><p>Un seul endroit pour le quotidien familial et tes priorités.</p></div>' +
-    '<div class="tiles hub-tiles">' +
-    tile("taches", "Tâches", "Mes priorités", demoTasks.count() + " à faire", "var(--t-taches)", '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8 12 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2"/>') +
-    tile("courses", "Courses", next ? esc(next.nom) + " · " + esc(fmtD(next.date)) : "Aucune course prévue", next ? left + " article" + (left > 1 ? "s" : "") + " à acheter" : "", "var(--t-courses)",
-      '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
-    tile("menus", "Menus", todays.length ? "Aujourd’hui" : "Prochain repas", menuSub, "var(--t-menus)",
-      '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
-    tile("budget", "Budget", "Versements du mois", bs ? me + " : " + money(bs[me]) + " CHF<br>" + other() + " : " + money(bs[other()]) + " CHF" : "Chargement…", "var(--t-budget)",
-      '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
-    tile("reglages", "Réglages", "Téléphone de " + esc(me), "Listes, historique des prix", "var(--t-reglages)",
-      '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
-    '</div><div class="quick"><button class="btn" data-quick="add">+ Ajouter à la liste</button><button class="btn" data-quick="store">Mode magasin</button><button class="btn" data-quick="depense">+ Dépense</button></div>';
-  main.innerHTML = h;
+    '<h3 class="sk-section-title">MES ESPACES</h3><div class="sk-tiles">' +
+    card("agenda", "agenda", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>', "Agenda", "Planning familial") +
+    card("courses", "courses", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h2l2 11h12l2-8H6M9 21h1M17 21h1"/></svg>', "Courses", next ? left + " article" + (left === 1 ? '' : 's') + " à acheter" : "Listes partagées") +
+    card("budget", "budget", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M16 15h2"/></svg>', "Budget", "Finances et projets") +
+    card("menus", "menus", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v8m4-8v8M7 11a2 2 0 0 0 4 0m-2 0v10M18 3c-3 3-3 9 0 10v8"/></svg>', "Repas", mealInfo) +
+    '</div>' +
+    '<button type="button" class="sk-ai" data-ai-preview><span>✦ Demander à l’assistant IA</span>' +
+    '<span class="sk-mic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"/></svg></span></button>' +
+    '<details class="sk-disclosure"><summary>Alertes et agenda détaillé</summary>' + alertsHtml() + agenda.html() + '</details>' +
+    '<div class="quick"><button class="btn" data-quick="add">+ Courses</button>' +
+    '<button class="btn" data-quick="depense">+ Dépense</button>' +
+    '<button class="btn" data-tab="reglages">Réglages</button></div></section>';
 }
 
 function renderCourses() {
@@ -664,11 +673,13 @@ $("#toastUndo").addEventListener("click", () => { $("#toast").hidden = true; und
 document.addEventListener("click", e => {
   const t = e.target.closest("button") || e.target.closest("tr[data-fact]"); if (!t || t.closest("#sheet") && !t.dataset.recipe) return;
   const ds = t.dataset;
-  if (tab === "accueil" && agenda.click(t)) return;
+  if (["accueil", "agenda"].includes(tab) && agenda.click(t)) return;
   if (demoTasks.click(t)) return;
+  if (t.hasAttribute("data-back")) { if (tab !== "accueil" || tabHistory.length) backTab(); return }
+  if (t.hasAttribute("data-ai-preview")) { toast("Assistant IA prévu : aucune connexion vocale active"); return }
   if (tab === "budget" && t.id === "add") return budget.add();
   if (tab === "budget" && budget.click(t)) return;
-  if (ds.tab) { tab = ds.tab; ls.set("tab", tab); render(); window.scrollTo(0, 0); return }
+  if (ds.tab) { goTab(ds.tab); return }
   if (ds.quick === "add") { tab = "courses"; render(); return editor(null) }
   if (ds.quick === "store") { tab = "courses"; return setStore(true) }
   if (ds.quick === "depense") { tab = "budget"; render(); return budget.add() }
