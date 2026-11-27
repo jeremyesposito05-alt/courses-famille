@@ -1,117 +1,190 @@
-/* Tâches V1, prototype local.
-   Pas de stockage Firestore ni de données confidentielles avant l'authentification individuelle.
-   Chaque profil sur chaque navigateur dispose de ses propres tâches d'essai. */
+/* Priorites V2, demo locale uniquement.
+   Le code famille / choix Papa-Maman n'est pas une authentification.
+   Ne jamais saisir de donnees reelles sensibles ou CABS ici. */
 export function demoTasksModule(ctx) {
   const { me, esc, rerender, toast } = ctx;
   const storageKey = () => "cf.prototype.todos.v1." + (me() === "Maman" ? "Maman" : "Papa");
+  const today = () => {
+    const d = new Date();
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+  };
+  const categories = () => [
+    { id: "famille", title: "Famille", icon: "⌂", css: "family" },
+    ...(me() === "Maman" ? [] : [{ id: "pro", title: "Pro", icon: "▣", css: "work" }]),
+    { id: "general", title: "Général", icon: "✧", css: "general" }
+  ];
   let currentFilter = "open";
 
   function read() {
     try {
-      const value = JSON.parse(localStorage.getItem(storageKey()) || "[]");
-      return Array.isArray(value) ? value.filter(t => t && typeof t.id === "string" && typeof t.text === "string").slice(0, 500) : [];
+      const v = JSON.parse(localStorage.getItem(storageKey()) || "[]");
+      if (!Array.isArray(v)) return [];
+      return v.filter(t => t && typeof t.id === "string" && typeof t.text === "string").slice(0, 500)
+        .map(t => ({ ...t, area: t.area === "perso" ? "general" : (t.area || "famille") }))
+        .filter(t => categories().some(c => c.id === t.area));
     } catch (_) { return [] }
   }
 
-  function save(tasks) {
-    try { localStorage.setItem(storageKey(), JSON.stringify(tasks)); return true }
+  function save(data) {
+    try { localStorage.setItem(storageKey(), JSON.stringify(data)); return true }
     catch (_) { toast("Stockage local indisponible : modification non enregistrée"); return false }
   }
 
   const when = date => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return "";
-    return new Date(date + "T12:00:00").toLocaleDateString("fr-CH", { day: "numeric", month: "short" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return "Sans échéance";
+    const d = new Date(date + "T12:00:00");
+    return new Intl.DateTimeFormat("fr-CH", { day: "numeric", month: "short" }).format(d);
   };
 
   function ordered() {
-    return read().sort((a, b) => Number(a.done) - Number(b.done) ||
+    return read().sort((a,b) =>
+      Number(a.done) - Number(b.done) ||
       Number(b.priority === "high") - Number(a.priority === "high") ||
       (a.due || "9999-12-31").localeCompare(b.due || "9999-12-31") ||
-      (a.created || 0) - (b.created || 0));
+      (a.created || 0) - (b.created || 0)
+    );
   }
 
-  function row(t, compact) {
-    const meta = [t.area === "perso" ? "Personnel" : "Famille", t.priority === "high" ? "Priorité haute" : "", when(t.due)].filter(Boolean).join(" · ");
-    return '<div class="todo-item' + (t.done ? ' is-done' : '') + '">' +
-      '<label class="todo-control"><input type="checkbox" data-todo-check="' + esc(t.id) + '"' + (t.done ? ' checked' : '') + '><span class="todo-text">' + esc(t.text) + '</span></label>' +
-      '<div class="todo-meta">' + esc(meta) + '</div>' +
-      (compact ? '' : '<button class="todo-remove" data-todo-delete="' + esc(t.id) + '" aria-label="Supprimer cette tâche">×</button>') +
-      '</div>';
+  function counts() {
+    const active = ordered().filter(t => !t.done);
+    return {
+      all: active.length,
+      urgent: active.filter(t => t.priority === "high").length,
+      done: ordered().filter(t => t.done).length,
+      byCategory: Object.fromEntries(categories().map(c => [c.id, active.filter(t => t.area === c.id).length]))
+    };
   }
 
   function summary() {
-    const all = ordered(), waiting = all.filter(t => !t.done), top = waiting.slice(0, 3);
-    return '<section class="hub-tasks" aria-label="Tâches à faire">' +
-      '<div class="hub-section-head"><div><span class="hub-kicker">MES PRIORITÉS</span><h2>Tâches à faire</h2></div>' +
-      '<button class="hub-text-link" data-tab="taches">Tout voir <span aria-hidden="true">→</span></button></div>' +
-      '<div class="hub-task-wrap"><p class="hub-task-count">' + waiting.length + ' tâche' + (waiting.length > 1 ? 's' : '') + ' en attente</p>' +
-      (top.length ? top.map(t => row(t, true)).join("") : '<p class="hub-empty">Aucune tâche d’essai en attente. Ajoute ta première tâche.</p>') +
-      '<button class="hub-task-add" data-tab="taches">+ Ajouter une tâche</button>' +
-      '<p class="hub-preview-note">Version d’essai locale : les tâches ne sont pas synchronisées entre téléphones.</p></div></section>';
+    const c = counts();
+    return '<button class="sk-priority-link sk-card" data-tab="taches" aria-label="Ouvrir les priorités : ' + c.all + ' tâches en attente">' +
+      '<span class="sk-eyebrow">CENTRE D’ORGANISATION</span>' +
+      '<span class="sk-priority-header"><strong>✎ Mes priorités</strong>' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18 19 5M9 5h10v10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+      '<span class="sk-priority-desc">' + c.all + ' tâche' + (c.all !== 1 ? 's' : '') + ' en attente · ' + c.urgent + ' urgente' + (c.urgent !== 1 ? 's' : '') + '</span>' +
+      '<span class="sk-counts">' + categories().map(cat =>
+      '<span class="sk-count ' + cat.css + '"><strong>' + c.byCategory[cat.id] + '</strong><span>' + cat.title + '</span></span>').join("") + '</span>' +
+      '</button>';
+  }
+
+  function row(t) {
+    return '<div class="sk-task-row' + (t.done ? ' done' : '') + '">' +
+      '<label class="sk-task-copy" style="display:flex;gap:10px;align-items:start;cursor:pointer">' +
+      '<input type="checkbox" data-todo-check="' + esc(t.id) + '"' + (t.done ? ' checked' : '') + ' aria-label="Terminer la priorité ' + esc(t.text) + '">' +
+      '<span style="flex:1"><strong>' + esc(t.text) + '</strong><small>' +
+      (t.priority === "high" ? '<span class="sk-urgent">Urgent</span> · ' : '') + esc(when(t.due)) + '</small></span></label>' +
+      '<button class="sk-delete" type="button" data-todo-delete="' + esc(t.id) + '" aria-label="Supprimer la tâche ' + esc(t.text) + '">×</button>' +
+      '</div>';
   }
 
   function render(main) {
-    const all = ordered(), shown = all.filter(t => currentFilter === "all" || (currentFilter === "open" ? !t.done : t.done));
-    const pending = all.filter(t => !t.done).length;
-    main.innerHTML = '<section class="todo-page">' +
-      '<div class="hub-hero mini"><span class="hub-kicker">ORGANISATION</span><h2>Mes tâches</h2>' +
-      '<p>' + pending + ' tâche' + (pending > 1 ? 's' : '') + ' en attente. Concentre-toi sur l’essentiel.</p></div>' +
-      '<div class="todo-warning" role="note">Prototype local. Aucune synchronisation Firebase pour le moment. Ne saisis pas d’informations confidentielles.</div>' +
-      '<form id="todoForm" class="todo-form">' +
-      '<label for="todoTitle">Nouvelle tâche</label><div class="todo-add-line"><input id="todoTitle" name="text" required maxlength="180" placeholder="Ex. réserver le contrôle technique" autocomplete="off">' +
-      '<button type="submit" aria-label="Ajouter la tâche">Ajouter</button></div>' +
-      '<div class="todo-fields"><label>Catégorie<select name="area"><option value="famille">Famille</option><option value="perso">Personnel</option></select></label>' +
-      '<label>Priorité<select name="priority"><option value="normal">Normale</option><option value="high">Haute</option></select></label>' +
-      '<label>Échéance<input name="due" type="date"></label></div></form>' +
-      '<div class="todo-filter-row" role="group" aria-label="Filtrer les tâches">' +
-      [['open', 'À faire'], ['all', 'Toutes'], ['done', 'Terminées']].map(([id, title]) =>
+    const all = ordered();
+    const c = counts();
+    const selected = all.filter(t => {
+      if (currentFilter === "done") return !!t.done;
+      if (t.done) return false;
+      if (currentFilter === "urgent") return t.priority === "high";
+      if (currentFilter === "today") return !!t.due && t.due <= today();
+      return true;
+    });
+    const choices = categories();
+    main.innerHTML = '<section class="sk-priorities-page">' +
+      '<div class="sk-eyebrow">MON ORGANISATION</div><h2 class="sk-page-title">Mes priorités ✎</h2>' +
+      '<p class="sk-subtitle">Un endroit pour agir, sans se disperser.</p>' +
+      '<p class="sk-summary-line"><strong>' + c.all + ' tâches</strong> à traiter · ' + c.urgent + ' urgente' + (c.urgent !== 1 ? 's' : '') + '</p>' +
+      '<div class="sk-priority-filters" role="group" aria-label="Filtrer les priorités">' +
+      [['open','Toutes'],['urgent','Urgentes'],['today',"Aujourd'hui"],['done','Terminées']].map(([id,title]) =>
       '<button data-todo-filter="' + id + '" aria-pressed="' + (currentFilter === id) + '">' + title + '</button>').join("") +
-      '</div><div class="todo-list">' +
-      (shown.length ? shown.map(t => row(t, false)).join("") : '<p class="hub-empty">Aucune tâche dans cette sélection.</p>') +
-      '</div></section>';
+      '</div><div class="sk-groups">' +
+      choices.map(cat => {
+        const list = selected.filter(t => t.area === cat.id);
+        return '<section class="sk-group sk-card ' + cat.css + '" aria-label="Priorités ' + cat.title + '">' +
+          '<div class="sk-group-header"><strong>' + cat.icon + ' ' + cat.title + '</strong><span class="sk-group-count">' + list.length + '</span></div>' +
+          (list.length ? list.map(row).join("") : '<div class="sk-group-empty">Rien à signaler ici.</div>') +
+          '</section>';
+      }).join("") + '</div>' +
+      '<button type="button" class="sk-add-task sk-card" data-todo-add aria-expanded="false">＋ Nouvelle priorité</button>' +
+      '<form id="todoForm" class="sk-task-form" hidden>' +
+      '<label for="todoTitle">Quelle priorité ?<input id="todoTitle" name="text" required maxlength="180" autocomplete="off" placeholder="Ex. préparer les affaires du week-end"></label>' +
+      '<div class="sk-form-grid"><label>Thème<select name="area">' + choices.map(cat =>
+      '<option value="' + cat.id + '">' + cat.title + '</option>').join("") + '</select></label>' +
+      '<label>Importance<select name="priority"><option value="normal">Normale</option><option value="high">Urgente</option></select></label>' +
+      '<label>Échéance<input name="due" type="date"></label></div>' +
+      '<div class="sk-task-actions"><button class="primary" type="submit">Enregistrer</button>' +
+      '<button class="secondary" type="button" data-todo-cancel>Annuler</button></div></form>' +
+      '<p class="sk-preview">Prototype local uniquement. Les tâches ne sont pas synchronisées ni protégées par un compte. N’y saisis pas de données sensibles, notamment CABS.</p>' +
+      '</section>';
   }
 
   function add(form) {
     const title = form.elements.namedItem("text").value.trim();
     if (!title) return;
-    const tasks = read();
+    const available = categories().map(c => c.id);
+    const area = form.elements.namedItem("area").value;
+    if (!available.includes(area)) { toast("Catégorie indisponible"); return }
+    const data = ordered();
     const item = {
-      id: "todo_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9),
-      text: title.slice(0, 180), area: form.elements.namedItem("area").value === "perso" ? "perso" : "famille",
+      id: "todo_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,9),
+      text: title.slice(0,180), area,
       priority: form.elements.namedItem("priority").value === "high" ? "high" : "normal",
-      due: form.elements.namedItem("due").value || "", done: false, created: Date.now(), updated: Date.now()
+      due: form.elements.namedItem("due").value || "",
+      done:false, created:Date.now(), updated:Date.now()
     };
-    if (save([item, ...tasks].slice(0, 500))) { currentFilter = "open"; rerender(); toast("Tâche d’essai ajoutée sur cet appareil") }
+    if (save([item,...data].slice(0,500))) {
+      currentFilter = "open";
+      rerender(); toast("Priorité d’essai ajoutée localement");
+    }
   }
 
-  function toggle(id, value) {
-    const tasks = read(), task = tasks.find(t => t.id === id);
-    if (!task) return;
-    task.done = value; task.updated = Date.now();
-    if (save(tasks)) rerender();
+  function toggle(id, checked) {
+    const data = read(), t = data.find(x => x.id === id);
+    if (!t) return;
+    t.done = checked; t.updated = Date.now();
+    if (save(data)) rerender();
   }
 
   function click(button) {
     if (button.dataset.todoFilter) {
-      currentFilter = button.dataset.todoFilter; rerender(); return true;
+      currentFilter = button.dataset.todoFilter;
+      rerender(); return true;
+    }
+    if (button.hasAttribute("data-todo-add")) {
+      const form = document.querySelector("#todoForm");
+      if (!form) return true;
+      form.hidden = false;
+      button.setAttribute("aria-expanded","true");
+      form.querySelector("input").focus();
+      return true;
+    }
+    if (button.hasAttribute("data-todo-cancel")) {
+      const form = document.querySelector("#todoForm");
+      if (form) form.hidden = true;
+      const btn = document.querySelector("[data-todo-add]");
+      if (btn) btn.setAttribute("aria-expanded","false");
+      return true;
     }
     if (button.dataset.todoDelete) {
-      if (!button.dataset.confirmDelete) { button.dataset.confirmDelete = "1"; button.textContent = "Confirmer"; return true }
-      if (save(read().filter(t => t.id !== button.dataset.todoDelete))) { rerender(); toast("Tâche d’essai supprimée") }
+      if (!button.dataset.confirmDelete) {
+        button.dataset.confirmDelete = "1";
+        button.textContent = "Confirmer";
+        return true;
+      }
+      if (save(read().filter(t => t.id !== button.dataset.todoDelete))) {
+        rerender(); toast("Priorité d’essai supprimée");
+      }
       return true;
     }
     return false;
   }
 
-  document.addEventListener("change", event => {
-    const field = event.target;
-    if (!field.matches('[data-todo-check]')) return;
-    toggle(field.dataset.todoCheck, field.checked);
+  document.addEventListener("change", e => {
+    if (!e.target.matches("[data-todo-check]")) return;
+    toggle(e.target.dataset.todoCheck, e.target.checked);
   });
-  document.addEventListener("submit", event => {
-    if (event.target.id !== "todoForm") return;
-    event.preventDefault();
-    add(event.target);
+  document.addEventListener("submit", e => {
+    if (e.target.id !== "todoForm") return;
+    e.preventDefault(); add(e.target);
   });
-  return { render, summary, click, count: () => read().filter(t => !t.done).length };
+
+  return { summary, render, click, count: () => counts().all };
 }
