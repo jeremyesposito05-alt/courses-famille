@@ -1,0 +1,41 @@
+name: Tests des règles Firestore bêta
+
+on:
+  push:
+    branches:
+      - develop/refonte-famille-hub-ia
+    paths:
+      - "firebase/firestore-beta.rules"
+      - "security-tests/**"
+      - ".github/workflows/firestore-beta-tests.yml"
+  pull_request:
+    paths:
+      - "firebase/firestore-beta.rules"
+      - "security-tests/**"
+      - ".github/workflows/firestore-beta-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-security:
+    name: Tests de sécurité hors production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: security-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Installer les dépendances de test
+        run: npm install --no-audit --no-fund
+      - name: Exécuter les tests dans l'émulateur Firestore
+        run: npm run test:rules
