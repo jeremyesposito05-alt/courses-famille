@@ -4,6 +4,7 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
          getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { budgetModule } from "./budget.js";
 import { agendaModule } from "./agenda.js";
+import { demoTasksModule } from "./tasks-demo.js";
 
 /* ---------- Firebase (configuration publique ; la liste est protégée par le code famille) ---------- */
 const fbApp = initializeApp({
@@ -74,7 +75,7 @@ let code = ls.get("code"), me = ls.get("me");
 const seenAtOpen = Number(ls.get("seen") || 0);
 let pid = null, per = null, items = {}, hist = {}, periods = {};
 let loaded = false, offline = false, pending = false;
-let tab = ["courses", "menus", "budget", "reglages"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil", trip = ls.get("trip") || "", filter = "tout";
+let tab = ["courses", "menus", "budget", "reglages", "taches"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil", trip = ls.get("trip") || "", filter = "tout";
 let store = ls.get("store") === "1", wakeLock = null;
 let unsubs = [], unsubPer = [];
 const undoStack = [];
@@ -201,14 +202,15 @@ function render() {
   $("#app").innerHTML = '<header class="top" id="top"></header><main id="main"></main>' +
     ((tab === "courses" && trip) || tab === "budget" ? '<button class="fab" id="add" aria-label="Ajouter un article">+</button>' : "") +
     '<nav class="tabs" role="tablist">' +
-    tabBtn("accueil", "Aujourd’hui", '<path d="M3 11 12 4l9 7M5 10v10h14V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
+    tabBtn("accueil", "Hub", '<path d="M3 11 12 4l9 7M5 10v10h14V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
+    tabBtn("taches", "Tâches", '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8 12 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2"/>') +
     tabBtn("courses", "Courses", '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
     tabBtn("menus", "Menus", '<path d="M7 3v8a2 2 0 0 0 2 2v8M11 3v8a2 2 0 0 1-2 2M17 3c-2 2-2 6 0 8v10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>') +
     tabBtn("budget", "Budget", '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M16 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
     tabBtn("reglages", "Réglages", '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') +
     '</nav>';
   renderTop();
-  if (tab === "accueil") renderHome(); else if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else if (tab === "budget") budget.render($("#main")); else renderSettings();
+  if (tab === "accueil") renderHome(); else if (tab === "taches") demoTasks.render($("#main")); else if (tab === "courses") renderCourses(); else if (tab === "menus") renderMenus(); else if (tab === "budget") budget.render($("#main")); else renderSettings();
 }
 function tabBtn(id, t, svg) {
   const n = id === "courses" && loaded ? alerts().length : 0;
@@ -218,7 +220,7 @@ function tabBtn(id, t, svg) {
 function renderTop() {
   const top = $("#top"); if (!top) return;
   const syncTxt = !loaded ? "Connexion…" : offline ? "Hors ligne" : pending ? "Envoi…" : "Synchronisé";
-  let h = '<div class="top-row"><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : "Réglages") + '</h1>' +
+  let h = '<div class="top-row"><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : tab === "taches" ? "Tâches" : "Réglages") + '</h1>' +
     '<span class="sync' + (offline ? " off" : "") + '"><i></i>' + syncTxt + '</span>' +
     (tab === "courses" ? '<button class="me store-btn" id="storeBtn" aria-pressed="' + store + '">' + (store ? "Quitter" : "Mode magasin") + '</button>' : '<button class="me ' + me + '" data-tab="reglages">' + me + '</button>') + '</div>';
   if (tab === "budget") h += budget.top();
@@ -257,7 +259,11 @@ function renderHome() {
   // Budget : ce que chacun verse ce mois
   const bs = budget.summary();
   let h = agenda.html() + alertsHtml() +
-    '<div class="tiles">' +
+    demoTasks.summary() +
+    '<div class="hub-section-head"><span class="hub-kicker">ACCÈS RAPIDE</span><h2>Mes espaces</h2></div>' +
+    '<div class="hub-hero"><span class="hub-kicker">FAMILLE · NOUVEAU HUB</span><h2>Bienvenue dans ton espace</h2><p>Un seul endroit pour le quotidien familial et tes priorités.</p></div>' +
+    '<div class="tiles hub-tiles">' +
+    tile("taches", "Tâches", "Mes priorités", demoTasks.count() + " à faire", "var(--t-taches)", '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m8 12 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2"/>') +
     tile("courses", "Courses", next ? esc(next.nom) + " · " + esc(fmtD(next.date)) : "Aucune course prévue", next ? left + " article" + (left > 1 ? "s" : "") + " à acheter" : "", "var(--t-courses)",
       '<path d="M3 5h2l2.4 10.2a2 2 0 0 0 2 1.6h7.5a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/>') +
     tile("menus", "Menus", todays.length ? "Aujourd’hui" : "Prochain repas", menuSub, "var(--t-menus)",
@@ -370,6 +376,7 @@ const dlg = $("#dlg"), sheet = $("#sheet");
 const budget = budgetModule({ fs, code: () => code, me: () => me, tab: () => tab, esc, ls, sheet, toast: (t, u) => toast(t, u), openSheet: h => openSheet(h), closeSheet: () => closeSheet(), rerender: () => render(), isOpen: () => dlg.open });
 const agenda = agendaModule({ fs, code: () => code, me: () => me, tab: () => tab, esc, sheet, toast: (t, u) => toast(t, u), openSheet: h => openSheet(h), closeSheet: () => closeSheet(), rerender: () => render(), isOpen: () => dlg.open,
   iso, dt, addDays, mondayOf, today, weekSlots, slotTitle, slotData });
+const demoTasks = demoTasksModule({ me: () => me, esc, rerender: () => render(), toast: (t) => toast(t) });
 function openSheet(html) { sheet.innerHTML = html; try { dlg.showModal() } catch (e) { dlg.setAttribute("open", "") } }
 function closeSheet() { try { dlg.close() } catch (e) { dlg.removeAttribute("open") } render() }
 dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest(".x")) closeSheet() });
@@ -658,6 +665,7 @@ document.addEventListener("click", e => {
   const t = e.target.closest("button") || e.target.closest("tr[data-fact]"); if (!t || t.closest("#sheet") && !t.dataset.recipe) return;
   const ds = t.dataset;
   if (tab === "accueil" && agenda.click(t)) return;
+  if (demoTasks.click(t)) return;
   if (tab === "budget" && t.id === "add") return budget.add();
   if (tab === "budget" && budget.click(t)) return;
   if (ds.tab) { tab = ds.tab; ls.set("tab", tab); render(); window.scrollTo(0, 0); return }
