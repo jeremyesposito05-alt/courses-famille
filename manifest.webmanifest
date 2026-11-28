@@ -1,16 +1,30 @@
 {
-  "name": "Famille",
-  "short_name": "Famille",
-  "description": "Courses, menus et budget de la famille, partagés entre les téléphones.",
+  "name": "Famille — Prévisualisation",
+  "short_name": "Famille Essai",
+  "description": "Démonstration indépendante avec données fictives locales.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F3F5F1",
-  "theme_color": "#2F6B4F",
+  "background_color": "#fffcf6",
+  "theme_color": "#26445e",
   "icons": [
-    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
-  ]
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "id": "./preview"
 }

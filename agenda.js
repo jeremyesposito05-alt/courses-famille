@@ -1,5 +1,5 @@
 /* ---------- Emploi du temps de la famille : un jour en portrait, plusieurs jours en paysage ---------- */
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, arrayUnion } from "./preview-store.js";
 
 // Les thèmes, dans l'ordre du modèle papier (« Activités » est devenu « Transports »)
 export const ACATS = [

@@ -1,23 +1,9 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache,
-         collection, doc, query, where, onSnapshot, setDoc, updateDoc, deleteDoc, deleteField, writeBatch,
-         getDocFromServer } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { fs, collection, doc, query, where, onSnapshot, setDoc, updateDoc, deleteDoc, deleteField, writeBatch, getDocFromServer } from "./preview-store.js";
 import { budgetModule } from "./budget.js";
 import { agendaModule } from "./agenda.js";
 import { demoTasksModule } from "./tasks-demo.js";
 
-/* ---------- Firebase (configuration publique ; la liste est protégée par le code famille) ---------- */
-const fbApp = initializeApp({
-  apiKey: "AIzaSyCh8H211C1eWlmvOHfYN15KQJguZHOmvKk",
-  authDomain: "courses-famille-b9169.firebaseapp.com",
-  projectId: "courses-famille-b9169",
-  storageBucket: "courses-famille-b9169.firebasestorage.app",
-  messagingSenderId: "942002089203",
-  appId: "1:942002089203:web:09b3a4d4be183279af9b86"
-});
-let fs;
-try { fs = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
-catch (e) { fs = initializeFirestore(fbApp, { localCache: memoryLocalCache() }); }
+/* Preview only: all data lives on this device; no Firebase connection. */
 
 /* ---------- Constantes ---------- */
 const R = window.R, DESSERTS = window.DESSERTS;
@@ -53,8 +39,8 @@ const POOL = {
 const FRAGILE = /salade|tomate|concombre|courgette|champignon|épinard|coriandre|persil|avocat|fruits|banane/i;
 
 /* ---------- Outils ---------- */
-const ls = { get: k => { try { return localStorage.getItem("cf." + k) } catch (e) { return null } },
-             set: (k, v) => { try { localStorage.setItem("cf." + k, v) } catch (e) {} } };
+const ls = { get: k => { try { return localStorage.getItem("cf.preview." + k) } catch (e) { return null } },
+             set: (k, v) => { try { localStorage.setItem("cf.preview." + k, v) } catch (e) {} } };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const chf = n => (n == null || n === "" || isNaN(n)) ? "" : Number(n).toFixed(2);
@@ -71,22 +57,31 @@ const nid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const fmtQty = n => (Math.round(n * 100) / 100).toString().replace(".", ",").replace(/^0,5$/, "½");
 
 /* ---------- État ---------- */
-let code = ls.get("code"), me = ls.get("me");
+let code = "preview-demo", me = ls.get("me") === "Maman" ? "Maman" : "Papa";
 const seenAtOpen = Number(ls.get("seen") || 0);
 let pid = null, per = null, items = {}, hist = {}, periods = {};
 let loaded = false, offline = false, pending = false;
 let tab = ["courses", "menus", "budget", "reglages", "taches", "agenda"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "accueil", trip = ls.get("trip") || "", filter = "tout";
-const tabHistory = [];
+const allowedTabs = ["accueil", "taches", "agenda", "courses", "menus", "budget", "reglages"];
+let navDepth = 0;
+history.replaceState({preview: true, depth: 0}, "", "#" + tab);
 function goTab(next) {
-  const allowed = ["accueil", "taches", "agenda", "courses", "menus", "budget", "reglages"];
-  if (!allowed.includes(next) || next === tab) return;
-  tabHistory.push(tab); if (tabHistory.length > 20) tabHistory.shift();
-  tab = next; ls.set("tab", tab); render(); window.scrollTo(0, 0);
-}
-function backTab() {
-  tab = tabHistory.pop() || "accueil"; ls.set("tab", tab);
+  if (!allowedTabs.includes(next) || next === tab) return;
+  tab = next; navDepth++;
+  history.pushState({preview: true, depth: navDepth}, "", "#" + tab);
   render(); window.scrollTo(0, 0);
 }
+function backTab() {
+  if (navDepth > 0) history.back();
+  else if (tab !== "accueil") { tab = "accueil"; history.replaceState({preview:true, depth:0}, "", "#accueil"); render(); window.scrollTo(0,0); }
+}
+window.addEventListener("popstate", event => {
+  navDepth = event.state?.depth || 0;
+  const next = location.hash.slice(1);
+  tab = allowedTabs.includes(next) ? next : "accueil";
+  if (dlg.open) dlg.close();
+  render(); window.scrollTo(0,0);
+});
 let store = ls.get("store") === "1", wakeLock = null;
 let unsubs = [], unsubPer = [];
 const undoStack = [];
@@ -229,8 +224,8 @@ function tabBtn(id, t, svg) {
 
 function renderTop() {
   const top = $("#top"); if (!top) return;
-  const syncTxt = !loaded ? "Connexion…" : offline ? "Hors ligne" : pending ? "Envoi…" : "Synchronisé";
-  let h = '<div class="top-row"><button class="sk-back" type="button" data-back aria-label="Retour à l’écran précédent"' + (tab === "accueil" && !tabHistory.length ? " disabled" : "") + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7-7-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Retour</button><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "agenda" ? "Agenda" : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : tab === "taches" ? "Priorités" : "Réglages") + '</h1>' +
+  const syncTxt = "Essai local";
+  let h = '<div class="top-row"><button class="sk-back" type="button" data-back aria-label="Retour à l’écran précédent"' + (tab === "accueil" && !navDepth ? " disabled" : "") + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m7-7-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Retour</button><h1>' + (tab === "accueil" ? "Famille" : tab === "courses" ? (store ? "Au magasin" : "Courses") : tab === "agenda" ? "Agenda" : tab === "menus" ? "Menus" : tab === "budget" ? "Budget" : tab === "taches" ? "Priorités" : "Réglages") + '</h1>' +
     '<span class="sync' + (offline ? " off" : "") + '"><i></i>' + syncTxt + '</span>' +
     (tab === "courses" ? '<button class="me store-btn" id="storeBtn" aria-pressed="' + store + '">' + (store ? "Quitter" : "Mode magasin") + '</button>' : '<button class="me ' + me + '" data-tab="reglages">' + me + '</button>') + '</div>';
   if (tab === "budget") h += budget.top();
@@ -249,7 +244,7 @@ function renderTop() {
     }
     h += '<div class="summary num"><span><b>' + done + '</b> / ' + buy.length + ' dans le caddie</span><span>' + (paid ? 'payé <b>CHF ' + chf(paid) + '</b> · ' : "") + 'reste ≈ <b>CHF ' + chf(left) + '</b></span></div>';
   }
-  top.innerHTML = h;
+  top.innerHTML = h + '<div class="preview-banner">PRÉVISUALISATION · Données fictives, sur cet appareil uniquement</div>';
 }
 
 /* ---------- Hub central : résumé compact, priorités visibles ---------- */
@@ -265,7 +260,7 @@ function renderHome() {
     '<span class="sk-tile-icon" aria-hidden="true">' + icon + '</span><strong>' + title + '</strong><small>' + sub + '</small></button>';
   main.innerHTML =
     '<section class="sk-home">' +
-    '<span class="sk-eyebrow">ESPACE FAMILLE</span><h2 class="sk-page-title">Bonjour ! ☀</h2>' +
+    '<span class="sk-eyebrow">ESPACE FAMILLE</span><h2 class="sk-page-title">Bonjour ' + esc(me) + ' !</h2>' +
     '<p class="sk-subtitle">Tout ton quotidien, au même endroit.</p>' +
     '<div class="sk-today sk-card"><span class="sk-eyebrow">AUJOURD’HUI · ' + esc(fmtD(t0)) + '</span>' +
     '<div class="sk-today-stats"><strong>' + view.count + '</strong><span>événement' + (view.count === 1 ? '' : 's') + '</span><i></i>' +
@@ -277,7 +272,7 @@ function renderHome() {
     card("budget", "budget", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M16 15h2"/></svg>', "Budget", "Finances et projets") +
     card("menus", "menus", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v8m4-8v8M7 11a2 2 0 0 0 4 0m-2 0v10M18 3c-3 3-3 9 0 10v8"/></svg>', "Repas", mealInfo) +
     '</div>' +
-    '<button type="button" class="sk-ai" data-ai-preview><span>✦ Demander à l’assistant IA</span>' +
+    '<button type="button" class="sk-ai" data-ai-preview><span>✦ Assistant IA · bientôt disponible</span>' +
     '<span class="sk-mic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"/></svg></span></button>' +
     '<details class="sk-disclosure"><summary>Alertes et agenda détaillé</summary>' + alertsHtml() + agenda.html() + '</details>' +
     '<div class="quick"><button class="btn" data-quick="add">+ Courses</button>' +
@@ -359,7 +354,7 @@ function renderSettings() {
   $("#main").innerHTML =
     '<div class="card"><h2>Qui utilise ce téléphone ?</h2><div class="who">' +
     ["Papa", "Maman"].map(p => '<button class="' + p + '" data-me="' + p + '" aria-pressed="' + (me === p) + '">' + p + '</button>').join("") + '</div>' +
-    '<p>Vos ajouts portent la pastille « ajouté par ' + me + ' » sur l’autre téléphone.</p></div>' +
+    '<p>Profils de démonstration, sans authentification. Ne saisissez aucune information privée. Les données restent sur cet appareil et ne se synchronisent pas entre iPhone.</p></div>' +
     '<div class="card"><h2>Listes de courses</h2>' + (pers.length ? pers.map(([id, x]) =>
       '<button class="pline" data-per="' + id + '" aria-pressed="' + (id === pid) + '"><b>' + esc(x.nom || id) + '</b><span>' + (id === pid ? "affichée" : "afficher") + '</span></button>').join("") : '<p>Aucune.</p>') +
     '<p class="note">Une nouvelle liste se crée depuis Menus, à partir des repas d’une ou deux semaines.</p></div>' +
@@ -367,7 +362,7 @@ function renderSettings() {
       '<li><b>' + esc(l[0].n) + '</b><span class="num">' + l.slice(0, 4).map(x => chf(x.prix) + ' <small>' + short(x.date) + '</small>').join(" · ") + '</span></li>').join("") + '</ul>'
       : '<p>Encore vide. Dans un article, saisissez le « Prix payé » (sur le ticket), puis clôturez la course avec ⋯ : les prix sont enregistrés ici et resservent aux listes suivantes.</p>') + '</div>' +
     '<div class="card"><h2>Installer sur l’iPhone</h2><ol class="steps"><li>Ouvrir cette page dans <b>Safari</b>.</li><li>Toucher <b>Partager</b> (carré avec une flèche).</li><li>Choisir <b>Sur l’écran d’accueil</b>, puis <b>Ajouter</b>.</li></ol></div>' +
-    '<div class="card"><h2>Code famille</h2><p class="num">Code : <b>' + esc(code.slice(0, 3)) + '•••••••</b></p><button class="btn danger" id="logout">Se déconnecter de ce téléphone</button></div>';
+    '<div class="card"><h2>Environnement indépendant</h2><p>Données fictives enregistrées dans ce navigateur. Aucun accès au Firebase de production. Le choix Papa / Maman ne protège pas les données.</p></div>';
 }
 
 function renderSetup() {
@@ -385,7 +380,7 @@ const dlg = $("#dlg"), sheet = $("#sheet");
 const budget = budgetModule({ fs, code: () => code, me: () => me, tab: () => tab, esc, ls, sheet, toast: (t, u) => toast(t, u), openSheet: h => openSheet(h), closeSheet: () => closeSheet(), rerender: () => render(), isOpen: () => dlg.open });
 const agenda = agendaModule({ fs, code: () => code, me: () => me, tab: () => tab, esc, sheet, toast: (t, u) => toast(t, u), openSheet: h => openSheet(h), closeSheet: () => closeSheet(), rerender: () => render(), isOpen: () => dlg.open,
   iso, dt, addDays, mondayOf, today, weekSlots, slotTitle, slotData });
-const demoTasks = demoTasksModule({ me: () => me, esc, rerender: () => render(), toast: (t) => toast(t) });
+const demoTasks = demoTasksModule({ preview: true, me: () => me, esc, rerender: () => render(), toast: (t) => toast(t) });
 function openSheet(html) { sheet.innerHTML = html; try { dlg.showModal() } catch (e) { dlg.setAttribute("open", "") } }
 function closeSheet() { try { dlg.close() } catch (e) { dlg.removeAttribute("open") } render() }
 dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest(".x")) closeSheet() });
@@ -601,7 +596,7 @@ function submitList() {
   });
   b.set(fam("config", "app"), { periode: newPid }, { merge: true });
   b.commit().then(() => toast("Liste créée · " + count + " articles")).catch(fail);
-  closeSheet(); tab = "courses";
+  closeSheet(); goTab("courses");
 }
 
 // Recettes
@@ -675,16 +670,16 @@ document.addEventListener("click", e => {
   const ds = t.dataset;
   if (["accueil", "agenda"].includes(tab) && agenda.click(t)) return;
   if (demoTasks.click(t)) return;
-  if (t.hasAttribute("data-back")) { if (tab !== "accueil" || tabHistory.length) backTab(); return }
-  if (t.hasAttribute("data-ai-preview")) { toast("Assistant IA prévu : aucune connexion vocale active"); return }
+  if (t.hasAttribute("data-back")) { if (tab !== "accueil" || navDepth) backTab(); return }
+  if (t.hasAttribute("data-ai-preview")) { openSheet('<div class="sheet-head"><button class="x" aria-label="Retour">×</button><h2>Assistant IA</h2></div><p>À venir : organiser le quotidien par texte et par voix.</p><p><strong>Non connecté dans cette prévisualisation.</strong> Aucun message ni enregistrement vocal n’est envoyé.</p><p>L’assistant utilisera uniquement les données autorisées et ne pourra pas modifier le code de l’application.</p>'); return }
   if (tab === "budget" && t.id === "add") return budget.add();
   if (tab === "budget" && budget.click(t)) return;
   if (ds.tab) { goTab(ds.tab); return }
-  if (ds.quick === "add") { tab = "courses"; render(); return editor(null) }
-  if (ds.quick === "store") { tab = "courses"; return setStore(true) }
-  if (ds.quick === "depense") { tab = "budget"; render(); return budget.add() }
-  if (ds.trip) { trip = ds.trip; ls.set("trip", trip); tab = "courses"; render(); return }
-  if (ds.filter) { filter = ds.filter; tab = "courses"; render(); return }
+  if (ds.quick === "add") { goTab("courses"); return editor(null) }
+  if (ds.quick === "store") { goTab("courses"); return setStore(true) }
+  if (ds.quick === "depense") { goTab("budget"); return budget.add() }
+  if (ds.trip) { trip = ds.trip; ls.set("trip", trip); goTab("courses"); render(); return }
+  if (ds.filter) { filter = ds.filter; goTab("courses"); render(); return }
   if (ds.dismiss) { const d = dismissed(); d.push(ds.dismiss); ls.set(dismissKey(), JSON.stringify(d)); render(); return }
   if (ds.meal) return mealSheet(ds.meal);
   if (ds.check) {
@@ -702,7 +697,7 @@ document.addEventListener("click", e => {
   if (t.id === "newList") return newListSheet();
   if (t.id === "proposeWeek") return proposeWeek();
   if (ds.wk) { wk = addDays(wk, Number(ds.wk)); wkChosen = true; render(); window.scrollTo(0, 0); return }
-  if (ds.per) { setDoc(fam("config", "app"), { periode: ds.per }, { merge: true }).catch(fail); pid = ds.per; connectPeriod(); tab = "courses"; render(); return }
+  if (ds.per) { setDoc(fam("config", "app"), { periode: ds.per }, { merge: true }).catch(fail); pid = ds.per; connectPeriod(); goTab("courses"); render(); return }
   if (ds.recipe) return recipe(ds.recipe);
   if (ds.dessert) return dessert(ds.dessert);
   if (ds.me) { me = ds.me; ls.set("me", me); render(); return }

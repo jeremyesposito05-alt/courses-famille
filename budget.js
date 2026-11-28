@@ -1,5 +1,5 @@
 /* ---------- Onglet Budget : factures, prorata des salaires, organisation des paiements ---------- */
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch } from "./preview-store.js";
 
 // Catégories, dans l'ordre d'affichage du tableau. Les 8 premières ont une couleur fixe dans les graphiques.
 export const CATS = {

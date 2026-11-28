@@ -1,32 +1,27 @@
-// Service worker : l'appli s'ouvre même sans réseau (au fond du magasin).
-// Les données de la liste passent par Firebase, qui a son propre cache hors ligne.
-const VERSION = 'courses-hub-sketch-v2';
-const SHELL = ['./', 'index.html', 'app.js', 'tasks-demo.js', 'sketch-ui.css', 'budget.js', 'agenda.js', 'recettes.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png'];
-
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))));   // toujours la version fraîche du serveur
-  self.skipWaiting();
+// Dedicated preview cache, never shared with the family app.
+const VERSION = 'cf-preview-20261127-v1';
+const SHELL = ['./', 'index.html', 'bootstrap.js', 'app.js', 'preview-store.js', 'tasks-demo.js', 'sketch-ui.css', 'budget.js', 'agenda.js', 'recettes.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png'];
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(SHELL.map(url => new Request(url, {cache:'reload'})))).then(() => self.skipWaiting()));
 });
-
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))));
-  self.clients.claim();
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('cf-preview-') && key !== VERSION).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
-
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  const url = new URL(e.request.url);
-  const own = url.origin === location.origin;
-  const cdn = url.hostname === 'www.gstatic.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-  if (!own && !cdn) return; // Firestore et le reste : laissés au réseau
-
-  e.respondWith(caches.open(VERSION).then(async cache => {
-    const cached = await cache.match(e.request, { ignoreSearch: own });
-    const network = fetch(e.request, own ? { cache: 'no-cache' } : {}).then(res => {
-      if (res.ok || res.type === 'opaque') cache.put(e.request, res.clone());
-      return res;
-    });
-    if (own) return network.catch(() => cached || cache.match('index.html'));   // l'appli : la version en ligne d'abord
-    return cached || network;                              // bibliothèques et polices : le cache d'abord
-  }));
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (!SHELL.some(path => new URL(path, self.registration.scope).pathname === url.pathname)) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    try {
+      const response = await fetch(event.request, {cache:'no-cache'});
+      if (response.ok && !response.redirected) await cache.put(event.request, response.clone());
+      return response;
+    } catch (error) {
+      const cached = await cache.match(event.request, {ignoreSearch:true});
+      if (cached) return cached;
+      if (event.request.mode === 'navigate') return (await cache.match('index.html')) || Response.error();
+      return Response.error();
+    }
+  })());
 });
