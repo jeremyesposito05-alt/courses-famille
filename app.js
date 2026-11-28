@@ -267,10 +267,10 @@ function renderHome() {
     '<strong>' + demoTasks.count() + '</strong><span>priorité' + (demoTasks.count() === 1 ? '' : 's') + '</span></div></div>' +
     demoTasks.summary() +
     '<h3 class="sk-section-title">MES ESPACES</h3><div class="sk-tiles">' +
-    card("budget", "budget", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M16 15h2"/></svg>', "Budget", "Finances et projets") +
     card("agenda", "agenda", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>', "Agenda", "Planning familial") +
     card("courses", "courses", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h2l2 11h12l2-8H6M9 21h1M17 21h1"/></svg>', "Courses", next ? left + " article" + (left === 1 ? '' : 's') + " à acheter" : "Listes partagées") +
     card("menus", "menus", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v8m4-8v8M7 11a2 2 0 0 0 4 0m-2 0v10M18 3c-3 3-3 9 0 10v8"/></svg>', "Repas", mealInfo) +
+    card("budget", "budget", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M16 15h2"/></svg>', "Budget", "Finances et projets") +
     '</div>' +
     '<button type="button" class="sk-ai" data-ai-preview><span>✦ Assistant IA · bientôt disponible</span>' +
     '<span class="sk-mic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"/></svg></span></button>' +
